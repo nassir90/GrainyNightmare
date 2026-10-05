@@ -43,9 +43,10 @@
   .joy.idle .base, .joy.idle .knob { opacity:.4; }
   .topbtn { position:fixed; right:calc(16px + env(safe-area-inset-right, 0px)); top:calc(14px + env(safe-area-inset-top, 0px)); font:inherit; font-size:14px; letter-spacing:.06em; text-transform:uppercase;
     color:#fff; background:rgba(14,14,16,.45); border:1px solid rgba(255,255,255,.35); border-radius:2px; padding:6px 10px; cursor:pointer; display:none; text-shadow:0 0 6px rgba(0,0,0,.6); }
-  body.touch #hudbtn { display:block; } body.touch.walking #hudbtn { display:none; }
   body.touch.walking #exitbtn { display:block; }
-  .controls, .scenes { padding-bottom:env(safe-area-inset-bottom, 0px); }
+  .controls, .scenes { padding-bottom:env(safe-area-inset-bottom, 0px); transition:opacity .7s; }
+  /* the HUD wakes on input and fades when idle; while faded it ignores touches, so the first tap just wakes it */
+  body.hud-idle .controls, body.hud-idle .scenes { opacity:0; pointer-events:none; }
 </style>
 </head>
 <body>
@@ -63,7 +64,6 @@
 </div>
 
 <div class="joy idle" id="joy"><div class="base" id="joybase"></div><div class="knob" id="joyknob"></div></div>
-<button class="topbtn" id="hudbtn" type="button">HUD</button>
 <button class="topbtn" id="exitbtn" type="button">Exit</button>
 
 <nav class="scenes" id="scenes">
@@ -187,6 +187,27 @@ bind('grain','grain', v => v.toFixed(2) + '×');
     img.style.opacity = el.value; out.textContent = Math.round(el.value * 100) + '%';
     clearTimeout(timer); timer = setTimeout(() => { out.textContent = out.dataset.name; }, 900);
   });
+}
+/* HUD: wakes on any input and fades after a few idle seconds (the video-player pattern). Hovering it or dragging a slider keeps it awake.
+   On touch a tap on the scene wakes it; on desktop moving the mouse does. Walking: only a mouse hover wakes it, so look-drags and WASD don't. H pins it hidden. */
+{
+  const hud = [document.getElementById('controls'), document.getElementById('scenes')], IDLE_MS = IS_TOUCH ? 5000 : 3500;
+  let timer = 0, hot = 0, busy = false;
+  const sleep = () => { if (!hot && !busy) document.body.classList.add('hud-idle'); };
+  const wake = () => { document.body.classList.remove('hud-idle'); clearTimeout(timer); timer = setTimeout(sleep, IDLE_MS); };
+  const walking = () => typeof walk !== 'undefined' && walk.on;
+  hud.forEach(e => {
+    e.addEventListener('pointerenter', () => { hot++; wake(); });
+    e.addEventListener('pointerleave', () => { hot = Math.max(0, hot - 1); wake(); });
+    e.addEventListener('pointerdown', () => { busy = true; wake(); });
+  });
+  const release = () => { if (busy) { busy = false; wake(); } };
+  addEventListener('pointerup', release); addEventListener('pointercancel', release);
+  addEventListener('pointermove', e => { if (e.pointerType === 'mouse' && e.buttons === 0) wake(); });
+  addEventListener('pointerdown', () => { if (!walking()) wake(); }, true);
+  addEventListener('keydown', () => { if (!walking()) wake(); });
+  addEventListener('hudwake', wake);
+  wake();
 }
 addEventListener('keydown', e => { if (e.key === 'h' || e.key === 'H') [document.getElementById('controls'), document.getElementById('scenes')].forEach(e => e.classList.toggle('hidden-ui')); });
 
@@ -725,7 +746,7 @@ document.querySelectorAll('.line input').forEach(el => el.addEventListener('poin
 const EYE = 1.7;
 const walk = { on: false, w: 0, pos: new THREE.Vector3(0, 0, 0), vel: new THREE.Vector2(), yaw: 0, pitch: 0, phase: 0, amp: 0 };
 const keys = new Set(), walkBtn = document.getElementById('walkbtn');
-const setWalk = on => { walk.on = on; document.body.classList.toggle('walking', on); walkBtn.setAttribute('aria-pressed', String(on)); keys.clear(); };
+const setWalk = on => { walk.on = on; dispatchEvent(new Event('hudwake')); document.body.classList.toggle('walking', on); walkBtn.setAttribute('aria-pressed', String(on)); keys.clear(); };
 walkBtn.addEventListener('click', () => { setWalk(!walk.on); walkBtn.blur(); });
 addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
@@ -768,7 +789,6 @@ joyHome(); addEventListener('resize', () => { if (stick.id === null) joyHome(); 
   };
   canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end); }
 document.getElementById('exitbtn').addEventListener('click', () => setWalk(false));
-document.getElementById('hudbtn').addEventListener('click', () => [document.getElementById('controls'), document.getElementById('scenes')].forEach(e => e.classList.toggle('hidden-ui')));
 
 const PORTRAIT_YAW = [0, 4, -4.5, 0];                                // degrees right (+) / left (−), indexed by scene
 const COLLIDERS = () => [farmColliders, pylonScenes[0].colliders, pylonScenes[1].colliders, []][sceneIdx] || [];

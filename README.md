@@ -65,7 +65,9 @@ Just the dusk, the ground and the grass.
 
 Sliders ease to their targets with exponential smoothing (a first-order low-pass filter), so cranking the wind up spins the rotors up gradually instead of snapping.
 
-**H** hides the HUD. **E** starts walking. (On a phone: the **HUD** button, and **E · Walk**; see [On a phone](#on-a-phone).)
+**E** starts walking (on a phone, tap **E · Walk**; see [On a phone](#on-a-phone)).
+
+**The HUD gets out of the way by itself.** It fades after a few seconds without input (3.5 s on desktop, 5 s on touch) and wakes on mouse movement, a tap, or a key. It stays awake while the pointer is over it or a slider is being dragged. While walking, only hovering the mouse wakes it, so look-drags and WASD never do. **H** pins it hidden for clean captures.
 
 ---
 
@@ -105,13 +107,13 @@ Landscape is unchanged: at the reference shape the camera is exactly the origina
 
 ### Touch controls
 
-Tap **HUD** (top right) to show or hide the sliders and scene list; swipe left or right to change scene.
+Swipe left or right to change scene. There is no HUD button: the sliders and scene list fade out after a few idle seconds and come back when you touch the screen (the first tap just wakes them; it won't move a slider).
 
 Tap **E · Walk** and the screen becomes the controls:
 
 - the **bottom-left** is a floating **joystick**: it appears wherever your thumb lands, and pushing further goes faster (past about 70% of the radius you run)
 - **everywhere else** drags the camera to look around
-- **Exit** (top right) returns to the fixed view
+- **everywhere else** drags the camera to look around
 
 The two thumbs work independently, so you can walk and look at the same time.
 
