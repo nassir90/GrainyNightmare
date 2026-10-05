@@ -65,7 +65,7 @@ Just the dusk, the ground and the grass.
 
 Sliders ease to their targets with exponential smoothing (a first-order low-pass filter), so cranking the wind up spins the rotors up gradually instead of snapping.
 
-**H** hides the HUD. **E** starts walking.
+**H** hides the HUD. **E** starts walking. (On a phone: the **HUD** button, and **E · Walk**; see [On a phone](#on-a-phone).)
 
 ---
 
@@ -73,7 +73,7 @@ Sliders ease to their targets with exponential smoothing (a first-order low-pass
 
 Press **E**. The camera eases from the fixed telephoto composition down to eye level, 1.7 m above the real terrain, and you can walk around the world in first person.
 
-- **WASD** to move, **Shift** to run, **drag** to look around
+- **WASD** to move, **Shift** to run, **drag** to look around (on touch: left thumb joystick, drag anywhere else to look)
 - Windmill towers and pylons are solid
 - Press **E** again to return to the composition
 
@@ -84,6 +84,40 @@ Standing under a pylon, looking up, with the beacon flashing overhead:
 ![Under a pylon](docs/07-walk-under-pylon.jpg)
 
 The grass follows you (a meadow that tiles around the player and a ring of horizon stubs that travels with you), so the field never runs out. Beacon glows stay a fixed size from far away, to match the photograph, and grow physically as you get close.
+
+---
+
+## On a phone
+
+The page works in portrait (9:16 and friends). The fixed composition was framed for a wide photograph, which on a tall screen would keep only a sliver of it, so the camera adapts to the screen's shape:
+
+- **It widens** to keep a minimum horizontal field of view, so the windmills, pylons and their beacons still fit across the width.
+- **The horizon lifts** from 76% down the screen to about 58%, so the machinery sits mid-screen with the dark ground below it (where the controls live) instead of low in a sea of sky.
+- **Each scene turns toward its subject**: Pylons 1 swings a few degrees toward the near pylon, Pylons 2 toward its pair.
+- **Glows are sized by angle**, so the red lights stay in proportion to the machines at any framing, and grain is sized by the screen's shape so it stays fine on a tall screen.
+- Rendering is lighter on touch devices (lower pixel ratio).
+
+| Windmills | Pylons 1 | Pylons 2 |
+|:---:|:---:|:---:|
+| <img src="docs/15-phone-windmills.jpg" width="240"> | <img src="docs/16-phone-pylons-1.jpg" width="240"> | <img src="docs/17-phone-pylons-2.jpg" width="240"> |
+
+Landscape is unchanged: at the reference shape the camera is exactly the original 30° framing.
+
+### Touch controls
+
+Tap **HUD** (top right) to show or hide the sliders and scene list; swipe left or right to change scene.
+
+Tap **E · Walk** and the screen becomes the controls:
+
+- the **bottom-left** is a floating **joystick**: it appears wherever your thumb lands, and pushing further goes faster (past about 70% of the radius you run)
+- **everywhere else** drags the camera to look around
+- **Exit** (top right) returns to the fixed view
+
+The two thumbs work independently, so you can walk and look at the same time.
+
+| HUD | Walking, joystick engaged |
+|:---:|:---:|
+| <img src="docs/18-phone-hud.jpg" width="260"> | <img src="docs/19-phone-walk-joystick.jpg" width="260"> |
 
 ---
 
