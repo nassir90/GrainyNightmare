@@ -1,0 +1,171 @@
+# GRAINYNIGHTMARE
+
+A real-time 3D recreation of one photograph: a wind farm at dusk, black against a bruised sky, red aviation lights blinking, everything swimming in film grain.
+
+### ▶ **[Play it: mpts.ie/games/grainy](https://mpts.ie/games/grainy/)**
+
+A single `index.html`, [three.js](https://threejs.org) from a CDN, no build step.
+
+![Windmills at dusk](docs/01-windmills.jpg)
+
+---
+
+## The source photograph
+
+Everything started from this one image. Colours, the sky gradient, the grain, and where every windmill stands were all measured from it rather than eyeballed.
+
+![The reference photograph](docs/00-reference.webp)
+
+The page can fade the reference over the render (the **REF** slider) so the two can be compared directly. Here at 50%, the 3D scene on top of the photograph:
+
+![Render over reference](docs/14-reference-overlay.jpg)
+
+---
+
+## Four scenes
+
+Switch with **← / → / Space**, or click the names in the lower left. Each switch dips through black.
+
+### WINDMILLS
+Seventeen windmills placed where the photograph has them, plus a field of distant ones beyond the frame for wide windows. Rotors spin with real inertia and yaw into the wind. Each machine has its own blade length and thickness.
+
+![Windmills](docs/01-windmills.jpg)
+
+### PYLONS 1
+A line of transmission pylons marching away into the horizon, wires sagging between them and swaying in the wind, a distant row behind.
+
+![Pylons 1](docs/02-pylons-1.jpg)
+
+### PYLONS 2
+The same pylons, but running straight across the frame from left to right.
+
+![Pylons 2](docs/03-pylons-2.jpg)
+
+### BLANK
+Just the dusk, the ground and the grass.
+
+![Blank](docs/04-blank.jpg)
+
+---
+
+## Controls
+
+![The HUD](docs/05-hud.jpg)
+
+| Slider | What it does |
+|---|---|
+| **WIND** | Wind speed, 0–25 m/s. Drives rotor speed, grass lean and wire blow-out. |
+| **FROM** | Wind direction (where it blows *from*). Windmills turn to face it. |
+| **GUSTS** | How much the wind surges and drops. |
+| **GRASS** | How far the grass sways. |
+| **BLINK** | Seconds between each beacon's flashes. They are all out of step. |
+| **BLOOM** | The glow around the red lights. |
+| **GRAIN** | Film grain strength, 0–2×. |
+| **REF** | Fade the reference photograph over the scene. |
+
+Sliders ease to their targets with exponential smoothing (a first-order low-pass filter), so cranking the wind up spins the rotors up gradually instead of snapping.
+
+**H** hides the HUD. **E** starts walking.
+
+---
+
+## Walk the scene
+
+Press **E**. The camera eases from the fixed telephoto composition down to eye level, 1.7 m above the real terrain, and you can walk around the world in first person.
+
+- **WASD** to move, **Shift** to run, **drag** to look around
+- Windmill towers and pylons are solid
+- Press **E** again to return to the composition
+
+![Walking toward the windmills](docs/06-walk-field.jpg)
+
+Standing under a pylon, looking up, with the beacon flashing overhead:
+
+![Under a pylon](docs/07-walk-under-pylon.jpg)
+
+The grass follows you (a meadow that tiles around the player and a ring of horizon stubs that travels with you), so the field never runs out. Beacon glows stay a fixed size from far away, to match the photograph, and grow physically as you get close.
+
+---
+
+## Up close
+
+The windmills and pylons are modelled, not sprites.
+
+**Windmills** have a lathe-turned tower in flanged sections, a bevelled nacelle with a radiator, anemometer and vane, an ogive spinner, and blades lofted from airfoil sections with taper and twist:
+
+![Windmill close-up](docs/09-windmill-closeup.jpg)
+
+**Pylons** are built beam by beam: four tapering legs, horizontal bars with X-bracing, three tiers of cross-arms, hanging insulator strings, a peak, and conductors that sag and blow downwind. Every member ends on another member; the design (9 horizontal bars, 1.0× thickness) was chosen from a 5×5 grid of complexity against thickness.
+
+![Pylon close-up](docs/08-pylon-closeup.jpg)
+
+Thin parts widen in the vertex shader to at least about a pixel so far-off wires never vanish.
+
+---
+
+## Lighting: only the red lights
+
+There is no sun, no sky light and no environment map on the 3D objects. Everything has a fixed near-black base, so it reads as a silhouette. **The only thing that ever lights an object is a flashing red beacon**: each has an emissive housing, a glow sprite, and a real point light that briefly lights the nacelle or pylon top around it.
+
+Beacons are desynchronised and slow by design: the base interval is stretched by (number of lit windmills × 2), so the farm blinks lazily and out of step.
+
+### Bloom
+
+The light cores are drawn far brighter than white in a half-float target, and a multi-level blur spreads them. Without bloom the lights are just dots; with it they glow and spill over the silhouettes.
+
+| Bloom off | Bloom 2× |
+|---|---|
+| ![Bloom off](docs/12-bloom-off.jpg) | ![Bloom 2x](docs/13-bloom-heavy.jpg) |
+
+---
+
+## Grain
+
+Grain was measured from a flat patch of sky in the photograph: standard deviation of about 9 out of 255, greyscale (channels correlate above 0.95), neighbouring pixels correlated about 0.8 at one pixel and 0.5 at two. The renderer reproduces that with a fine layer and two coarser blotch layers, refreshed 24 times a second.
+
+Two details make it more than a texture:
+
+- **Grain is a distortion, not just a tint.** The same noise also displaces where the scene is sampled, so edges, blade tips and light glows get ragged and shimmer.
+- **Grain grows with distance.** Every surface writes its distance from the camera into the alpha channel, and grain strength scales with it. The sky gets the full amount; the ground at your feet gets almost none.
+
+| Grain off | Grain 2× |
+|---|---|
+| ![Grain off](docs/10-grain-off.jpg) | ![Grain heavy](docs/11-grain-heavy.jpg) |
+
+---
+
+## How it was built
+
+- **Measured, not guessed.** The sky gradient is row-by-row means from the photograph (using the brightest 40% of each row so silhouettes do not skew it): `rgb(106,81,91)` at the top, down to `rgb(33,31,50)` at the horizon, plus a left-to-right tint (pinker on the left, bluer and darker on the right). The tint wraps smoothly all the way round the sky so there is no seam when you look behind you.
+- **The horizon is ragged.** The photograph's horizon is a broken edge of grass stubs, not a fade, so it is built from 110,000 sized-in-pixels blades that sway in the wind.
+- **Linear-light pipeline.** Sampled sRGB values are converted to linear on the way in; lighting and bloom happen in linear; a final pass encodes back to sRGB and adds grain.
+- **Terrain.** The ground is never perfectly flat: a gentle undulation shared between the CPU (placement, collisions) and the shaders.
+
+## Run it locally
+
+```bash
+python3 -m http.server 8765
+# then open http://localhost:8765/index.html
+```
+
+It needs a local server (not `file://`) because it loads three.js as an ES module.
+
+## Deploy
+
+The live page is a [Cloudflare Worker](worker/) serving this repo's `index.html` and `ref.webp` at `mpts.ie/games/grainy`.
+
+```bash
+cd worker
+./deploy.sh        # copies the page into worker/public and runs `wrangler deploy`
+```
+
+See [`worker/`](worker/) for the config.
+
+## Files
+
+```
+index.html     the whole game
+ref.webp       the reference photograph (used by the REF overlay)
+docs/          screenshots used in this README
+worker/        Cloudflare Worker that serves the page at mpts.ie/games/grainy
+```

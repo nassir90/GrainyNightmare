@@ -1,0 +1,1001 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dusk Wind Farm</title>
+<style>
+  :root { --night:#0e0e10; --ink:#fff; --ink-faint:rgba(255,255,255,.35);
+          --font-label:"Times New Roman", Times, "Liberation Serif", serif; color-scheme:dark; }
+  html,body { margin:0; height:100%; background:var(--night); color:var(--ink); overflow:hidden; font-family:var(--font-label); }
+  canvas#c { position:fixed; inset:0; width:100%; height:100%; display:block; }
+  #ref { position:fixed; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; pointer-events:none; }
+  /* a column of line controls in the lower right, no panel */
+  .controls { position:fixed; right:20px; bottom:calc(18px + env(safe-area-inset-bottom, 0px));
+    display:grid; grid-template-columns:auto clamp(110px,18vw,170px); column-gap:14px; row-gap:4px; align-items:center;
+    font-size:15px; text-transform:uppercase; letter-spacing:.04em; text-shadow:0 0 6px rgba(0,0,0,.55); }
+  .controls.hidden-ui { display:none; }
+  .controls label { justify-self:end; cursor:pointer; white-space:nowrap; }
+  .squeeze { display:inline-block; transform:scaleX(.72); transform-origin:right center; }   /* compressed capitals */
+  .line { position:relative; height:22px; }
+  .line canvas { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+  .line input { position:absolute; inset:0; width:100%; height:100%; margin:0; opacity:0; cursor:ew-resize; }
+  .line:focus-within { outline:1px solid var(--ink-faint); outline-offset:2px; }
+  .scenes { position:fixed; left:20px; bottom:calc(18px + env(safe-area-inset-bottom, 0px)); display:flex; flex-direction:column; gap:2px;
+    font-size:15px; text-transform:uppercase; letter-spacing:.04em; text-shadow:0 0 6px rgba(0,0,0,.55); }
+  .scenes.hidden-ui { display:none; }
+  .scenes button { font:inherit; letter-spacing:inherit; text-transform:inherit; text-shadow:inherit; color:var(--ink); background:none; border:0;
+    padding:2px 0; text-align:left; cursor:pointer; opacity:.4; transition:opacity .4s; }
+  .scenes button[aria-current="true"] { opacity:1; }
+  .scenes button:hover { opacity:.75; }
+  .scenes .hint { opacity:.3; font-size:12px; margin-top:4px; }
+  .scenes .squeeze { transform-origin:left center; }
+  .scenes .walk { margin-top:8px; }
+  .scenes .walk[aria-pressed="true"] { opacity:1; }
+  .walkhint { position:fixed; left:50%; bottom:calc(18px + env(safe-area-inset-bottom, 0px)); transform:translateX(-50%); font-size:13px; letter-spacing:.05em; text-transform:uppercase;
+    text-shadow:0 0 6px rgba(0,0,0,.7); opacity:0; transition:opacity .6s; pointer-events:none; white-space:nowrap; }
+  .walkhint.on { opacity:.55; }
+  .walkhint.hidden-ui { display:none; }
+  body.walking canvas#c { cursor:grab; } body.walking.dragging canvas#c { cursor:grabbing; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<img id="ref" src="ref.webp" alt="">
+<div class="controls" id="controls">
+  <label for="speed"><span class="squeeze" id="o_speed" data-name="Wind">Wind</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="speed" type="range" min="0" max="25" step="0.1" value="8"></div>
+  <label for="dir"><span class="squeeze" id="o_dir" data-name="From">From</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="dir" type="range" min="0" max="360" step="1" value="150"></div>
+  <label for="gust"><span class="squeeze" id="o_gust" data-name="Gusts">Gusts</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="gust" type="range" min="0" max="1" step="0.01" value="0.35"></div>
+  <label for="sway"><span class="squeeze" id="o_sway" data-name="Grass">Grass</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="sway" type="range" min="0" max="2" step="0.01" value="1"></div>
+  <label for="int"><span class="squeeze" id="o_int" data-name="Blink">Blink</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="int" type="range" min="2" max="120" step="1" value="28"></div>
+  <label for="bloom"><span class="squeeze" id="o_bloom" data-name="Bloom">Bloom</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="bloom" type="range" min="0" max="2" step="0.01" value="1"></div>
+  <label for="grain"><span class="squeeze" id="o_grain" data-name="Grain">Grain</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="grain" type="range" min="0" max="2" step="0.01" value="1"></div>
+  <label for="refop"><span class="squeeze" id="o_refop" data-name="Ref">Ref</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="refop" type="range" min="0" max="1" step="0.01" value="0"></div>
+</div>
+
+<div class="walkhint" id="walkhint"><span class="squeeze">WASD move · Shift run · drag to look · E back</span></div>
+
+<nav class="scenes" id="scenes">
+  <button data-i="0"><span class="squeeze">Windmills</span></button>
+  <button data-i="1"><span class="squeeze">Pylons 1</span></button>
+  <button data-i="2"><span class="squeeze">Pylons 2</span></button>
+  <button data-i="3"><span class="squeeze">Blank</span></button>
+  <button class="walk" id="walkbtn" type="button" aria-pressed="false"><span class="squeeze">E · Walk</span></button>
+  <span class="hint"><span class="squeeze">← → · Space</span></span>
+</nav>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+// Linear-light pipeline. Sampled sRGB values are converted to linear on the way in
+// (rgb() below, and in the shaders), lighting and bloom happen in linear, and the final pass encodes back to sRGB.
+THREE.ColorManagement.enabled = true;
+
+/* ------------------------------------------------------------------ *
+ *  Sampled reference data (1080x605 source image)
+ * ------------------------------------------------------------------ */
+const REF_H = 605, REF_W = 1080, HORIZON_Y = 460;
+const FOV = 30;
+const F_REF = (REF_H / 2) / Math.tan(THREE.MathUtils.degToRad(FOV / 2)); // focal length in ref pixels
+
+// [y px in ref, r, g, b] — mean of the brighter 40% of pixels per row (excludes silhouettes).
+// The reference horizon is a ragged edge of grass stubs, not a fade, so the sky simply runs
+// down to its darkest haze colour (33,31,50 measured just above the edge) and the ground starts abruptly.
+const SKY_STOPS = [
+  [0,106,81,91],[120,101,76,88],[240,92,68,86],[300,83,62,82],[360,70,55,78],
+  [420,55,48,71],[440,40,37,58],[460,33,31,50],
+].map(([y,r,g,b]) => ({ h: HORIZON_Y - y, c: [r,g,b] })).sort((a,b) => a.h - b.h);
+
+// left→right tint measured across the sky (x px, dr, dg, db), relative to x=540
+const TINT_RAW = [[0,-6,-12,-11],[180,-2,-1,-2],[360,1,1,0],[540,0,0,0],[720,-15,-7,-7],[900,-30,-8,-10],[1080,-40,-9,-11]];
+const TINT = TINT_RAW.map(r => ({ x: r[0], d: [r[1], r[2], r[3]] }));
+
+const GROUND = [14,14,16], TOWER = [16,14,25], HAZE = [24,22,36];
+const rgb = a => new THREE.Color().setRGB(a[0]/255, a[1]/255, a[2]/255, THREE.SRGBColorSpace);   // sRGB bytes → linear Color
+
+// Turbines picked off the reference: [screen x px, hub y px]
+const TURBINES = [
+  [720,50],[505,230],[140,285],[232,320],[617,322],[828,263],[980,240],
+  [250,383],[35,405],[640,385],[1070,355],[715,402],[940,395],[800,410],[120,432],[455,418],[380,425],
+];
+const HUB_H = 80, CAM_H = 1.7, ROTOR_R = 30;
+const GRAIN_DIST = 1200;                                            // metres at which grain reaches full strength (sky counts as ≥ this)
+const TOP_MARGIN = 45;                                              // ref px of sky kept above the highest blade tip
+
+// Gentle, never-quite-flat terrain. Same function lives in JS (placement) and GLSL (ground + grass).
+const terrain = (x, z) => 0.9 * Math.sin(x * 0.011 + 0.7) * Math.cos(z * 0.014 + 1.9)
+                        + 0.45 * Math.sin(x * 0.027 - z * 0.021 + 2.2) + 0.25 * Math.sin(x * 0.06 + z * 0.05);
+const TERRAIN_GLSL = `
+  float terrain(vec2 p){
+    return 0.9 * sin(p.x * 0.011 + 0.7) * cos(p.y * 0.014 + 1.9)
+         + 0.45 * sin(p.x * 0.027 - p.y * 0.021 + 2.2) + 0.25 * sin(p.x * 0.06 + p.y * 0.05);
+  }`;
+const CAM_Y = CAM_H + terrain(0, 0);
+
+/* ------------------------------------------------------------------ *
+ *  Renderer, camera, targets
+ * ------------------------------------------------------------------ */
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+renderer.toneMapping = THREE.NoToneMapping;
+renderer.setClearColor(rgb(GROUND), 0);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(rgb([17, 15, 26]), 300, 5000);   // haze for 3D objects matches their unlit colour: distance never brightens them
+const camera = new THREE.PerspectiveCamera(FOV, 1, 1, 9500);
+camera.position.set(0, CAM_Y, 0);
+
+const HF = { type: THREE.HalfFloatType, colorSpace: THREE.LinearSRGBColorSpace };
+const rt = new THREE.WebGLRenderTarget(4, 4, { samples: 4, ...HF });
+
+/* ------------------------------------------------------------------ *
+ *  State / controls
+ * ------------------------------------------------------------------ */
+const S = { speed: 8, dir: 150, gust: 0.35, sway: 1, interval: 2, grain: 1, bloom: 1, flashDur: 0.42 };
+const bind = (id, key, fmt) => {
+  const el = document.getElementById(id), out = document.getElementById('o_' + id);
+  let timer;
+  const upd = () => {
+    S[key] = parseFloat(el.value);
+    out.textContent = fmt(S[key]);                                   // show the value while adjusting, then the name again
+    clearTimeout(timer); timer = setTimeout(() => { out.textContent = out.dataset.name; }, 900);
+  };
+  el.addEventListener('input', upd); S[key] = parseFloat(el.value);
+};
+// Smoothed copies of the controls. Each moves toward its slider with exponential smoothing
+// (a first-order low-pass filter): v += (target - v) * (1 - e^(-dt/τ)). Frame-rate independent.
+const V = {};
+const TAU = { speed: 1.4, dir: 1.0, gust: 0.7, sway: 0.6, grain: 0.35, bloom: 0.35 };   // time constants, seconds
+const smoothControls = dt => {
+  for (const k in TAU) {
+    const a = 1 - Math.exp(-dt / TAU[k]);
+    if (V[k] === undefined) V[k] = S[k];
+    V[k] += (k === 'dir' ? ((S[k] - V[k] + 540) % 360 - 180) : (S[k] - V[k])) * a;   // direction takes the short way round
+  }
+  V.dir = (V.dir + 360) % 360;
+};
+const compass = d => ['N','NE','E','SE','S','SW','W','NW'][Math.round(d / 45) % 8];
+bind('speed','speed', v => v.toFixed(1) + ' m/s');
+bind('dir','dir', v => v + '° ' + compass(v));
+bind('gust','gust', v => v.toFixed(2));
+bind('sway','sway', v => v.toFixed(2) + '×');
+bind('int','interval', v => v.toFixed(0) + ' s each');
+bind('bloom','bloom', v => v.toFixed(2) + '×');
+bind('grain','grain', v => v.toFixed(2) + '×');
+{
+  const el = document.getElementById('refop'), out = document.getElementById('o_refop'), img = document.getElementById('ref');
+  let timer;
+  el.addEventListener('input', () => {
+    img.style.opacity = el.value; out.textContent = Math.round(el.value * 100) + '%';
+    clearTimeout(timer); timer = setTimeout(() => { out.textContent = out.dataset.name; }, 900);
+  });
+}
+addEventListener('keydown', e => { if (e.key === 'h' || e.key === 'H') [document.getElementById('controls'), document.getElementById('scenes'), document.getElementById('walkhint')].forEach(e => e.classList.toggle('hidden-ui')); });
+
+/* ------------------------------------------------------------------ *
+ *  Sky dome: sampled gradient down to the horizon + horizontal tint
+ * ------------------------------------------------------------------ */
+const GRAD_N = 512, GRAD_MIN = 0, GRAD_MAX = HORIZON_Y;
+const gradData = new Uint8Array(GRAD_N * 4);
+for (let i = 0; i < GRAD_N; i++) {
+  const h = GRAD_MIN + (i / (GRAD_N - 1)) * (GRAD_MAX - GRAD_MIN);
+  let c;
+  if (h <= SKY_STOPS[0].h) c = SKY_STOPS[0].c;
+  else if (h >= SKY_STOPS.at(-1).h) c = SKY_STOPS.at(-1).c;
+  else {
+    let k = 0; while (SKY_STOPS[k + 1].h < h) k++;
+    const a = SKY_STOPS[k], b = SKY_STOPS[k + 1], t = (h - a.h) / (b.h - a.h);
+    c = a.c.map((v, j) => v + (b.c[j] - v) * t);
+  }
+  gradData.set([c[0], c[1], c[2], 255], i * 4);
+}
+const gradTex = new THREE.DataTexture(gradData, GRAD_N, 1, THREE.RGBAFormat);
+gradTex.minFilter = gradTex.magFilter = THREE.LinearFilter;
+gradTex.needsUpdate = true;
+
+const sky = new THREE.Mesh(
+  new THREE.SphereGeometry(7000, 48, 24),
+  new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    uniforms: {
+      uGrad: { value: gradTex }, uF: { value: F_REF },
+      uMin: { value: GRAD_MIN }, uMax: { value: GRAD_MAX }, uGround: { value: rgb(GROUND) },
+      uTintX: { value: TINT.map(t => t.x) },
+      uTintD: { value: TINT.map(t => new THREE.Vector3(...t.d.map(v => v / 255))) },
+    },
+    vertexShader: `varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+    fragmentShader: `
+      uniform sampler2D uGrad; uniform float uF, uMin, uMax; uniform vec3 uGround;
+      vec3 srgb2lin(vec3 c){ return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c)); }
+      uniform float uTintX[7]; uniform vec3 uTintD[7];
+      varying vec3 vDir;
+      void main(){
+        vec3 d = normalize(vDir);
+        float h = uF * d.y / max(length(d.xz), 1e-4);                 // px above horizon at ref scale
+        if (h < 0.0) { gl_FragColor = vec4(uGround, 1.0); return; }
+        vec3 col = texture2D(uGrad, vec2(clamp((h - uMin) / (uMax - uMin), 0.0, 1.0), 0.5)).rgb;
+        float az = atan(d.x, -d.z);                                   // full circle, no clamping
+        float aR = atan(540.0 / uF);                                  // half the width of the reference frame, as an angle
+        vec3 tint;
+        if (abs(az) <= aR) {                                          // inside the sampled span: the measured tint, left → right
+          float x = 540.0 + uF * tan(az);
+          tint = uTintD[0];
+          for (int i = 0; i < 6; i++) {
+            float t = clamp((x - uTintX[i]) / (uTintX[i+1] - uTintX[i]), 0.0, 1.0);
+            if (x > uTintX[i]) tint = mix(uTintD[i], uTintD[i+1], t);
+          }
+        } else {                                                      // everywhere else: ease from the right-hand tint round the back to the left-hand one
+          float span = 6.2831853 - 2.0 * aR;
+          float tt = (az > 0.0 ? az - aR : az + 6.2831853 - aR) / span;
+          tint = mix(uTintD[6], uTintD[0], tt * tt * (3.0 - 2.0 * tt));
+        }
+        col += tint * smoothstep(0.0, 160.0, h);
+        gl_FragColor = vec4(srgb2lin(col), 1.0);
+      }`,
+  })
+);
+sky.renderOrder = -10; sky.frustumCulled = false;
+scene.add(sky);
+
+/* ------------------------------------------------------------------ *
+ *  Ground (undulating, faintly mottled) — alpha 0 so grain skips it
+ * ------------------------------------------------------------------ */
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(9000, 9000, 600, 600).rotateX(-Math.PI / 2),
+  new THREE.ShaderMaterial({
+    uniforms: { uBase: { value: rgb(GROUND) } },
+    vertexShader: `${TERRAIN_GLSL} varying vec2 vP; varying float vDist;
+      void main(){ vec3 p = position; p.y = terrain(p.xz); vP = p.xz; vec4 mv = modelViewMatrix * vec4(p, 1.0); vDist = length(mv.xyz); gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `uniform vec3 uBase; varying vec2 vP; varying float vDist;
+      void main(){
+        float n = 0.5 * sin(vP.x * 0.013) * sin(vP.y * 0.017 + 1.0) + 0.5 * sin(vP.x * 0.004 + vP.y * 0.006);
+        float near = 1.0 - smoothstep(0.0, 400.0, length(vP));
+        vec3 c = uBase + vec3(0.8, 0.8, 1.2) / 255.0 * 0.3 * (n * 0.6 + 0.3 * near);
+        gl_FragColor = vec4(c, vDist / ${GRAIN_DIST.toFixed(1)});   // alpha carries distance for the grain pass
+      }`,
+  })
+);
+ground.frustumCulled = false;
+scene.add(ground);
+
+/* ------------------------------------------------------------------ *
+ *  Grass: near blades + far stubs that ragged the horizon
+ * ------------------------------------------------------------------ */
+const grassU = {
+  uPhase: { value: 0 }, uWind: { value: new THREE.Vector2(1, 0) }, uSpeed: { value: 8 },
+  uSway: { value: 1 }, uGust: { value: 0.35 }, uTime: { value: 0 },
+  uBase: { value: rgb(GROUND) }, uTip: { value: rgb([22, 20, 30]) },
+  uOrigin: { value: new THREE.Vector2(0, 0) },                      // where the player stands (walk mode)
+};
+const grassVS = `
+  ${TERRAIN_GLSL}
+  attribute vec4 aData; attribute vec2 aRand; attribute float aW;
+  uniform float uPhase, uSpeed, uSway, uGust, uTime, uWrap, uGlue; uniform vec2 uWind, uOrigin, uK0;
+  uniform vec3 uBase, uTip;
+  varying vec3 vCol; varying float vFog, vDist;
+  void main(){
+    float h = position.y, H = aData.w, yaw = aData.z;
+    float W = aW * (1.0 - h * 0.92);
+    vec2 side = vec2(cos(yaw), sin(yaw));
+    vec2 xz = aData.xy;
+    if (uWrap > 0.0) { vec2 rel = mod(xz - uOrigin + vec2(uWrap), vec2(2.0 * uWrap)) - vec2(uWrap); xz = uOrigin + rel; }   // walk-mode field: tiles around the player
+    else if (uGlue > 0.5) xz += uOrigin;                                                                                  // walk-mode horizon stubs: travel with the player
+    float along = dot(xz, uWind);
+    float s01 = clamp(uSpeed / 12.0, 0.0, 2.0);
+    float k = 0.22 / (1.0 + length(xz - uK0) / 40.0);                  // far stubs move in longer, coherent waves
+    float ph = along * k - uPhase + aRand.x * 0.25;
+    float wave = sin(ph) + 0.45 * sin(ph * 2.3 + 1.3 + xz.y * 0.07);
+    float gust = 0.5 + 0.5 * sin(along * 0.05 - uTime * 0.35 + sin(xz.y * 0.03) * 2.0);
+    float amp = (0.10 + 0.32 * s01) * (1.0 + uGust * (gust - 0.5) * 1.8);
+    float lean = 0.12 + 0.55 * s01;
+    float stiff = 1.0 / (1.0 + H * 0.35);                        // tall stubs flex less
+    float bend = uSway * stiff * (lean + amp * wave);
+    float flutter = uSway * stiff * 0.12 * (0.2 + s01) * sin(ph * 3.9 + aRand.x * 4.0 + uTime * 2.0);
+    float ang = bend * h * 0.9;
+    vec2 perp = vec2(-uWind.y, uWind.x);
+    vec3 p = vec3(xz.x, terrain(xz) - 0.05, xz.y);
+    p.xz += side * position.x * W;
+    p.xz += uWind * sin(ang) * H * h;
+    p.xz += perp * flutter * H * h * h * 0.25;
+    p.y  += H * h * cos(ang);
+    vec4 mv = viewMatrix * vec4(p, 1.0);
+    gl_Position = projectionMatrix * mv;
+    vDist = length(mv.xyz);
+    float d = -mv.z;
+    vFog = smoothstep(18.0, 95.0, d);
+    float shade = 0.65 + 0.35 * aRand.y;
+    float sheen = 0.5 + 0.5 * wave;
+    vCol = mix(uBase, uTip * shade * (0.75 + 0.45 * sheen), pow(h, 1.4));
+  }`;
+const grassFS = `
+  uniform vec3 uBase; varying vec3 vCol; varying float vFog, vDist;
+  void main(){ gl_FragColor = vec4(mix(vCol, uBase, vFog), vDist / ${GRAIN_DIST.toFixed(1)}); }`;
+function makeGrass(N, fill, { wrap = 0, glue = 0, origin = false } = {}) {
+  const SEG = 5, pos = [], idx = [];
+  for (let i = 0; i <= SEG; i++) { const h = i / SEG; pos.push(-0.5, h, 0, 0.5, h, 0); }
+  for (let i = 0; i < SEG; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+  const g = new THREE.InstancedBufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  const data = new Float32Array(N * 4), rnd = new Float32Array(N * 2), wid = new Float32Array(N);
+  for (let i = 0; i < N; i++) { fill(i, data, rnd, wid); }
+  g.setAttribute('aData', new THREE.InstancedBufferAttribute(data, 4));
+  g.setAttribute('aRand', new THREE.InstancedBufferAttribute(rnd, 2));
+  g.setAttribute('aW', new THREE.InstancedBufferAttribute(wid, 1));
+  g.instanceCount = N;
+  const mesh = new THREE.Mesh(g, new THREE.ShaderMaterial({
+    uniforms: Object.assign({}, grassU, { uWrap: { value: wrap }, uGlue: { value: glue }, uK0: origin ? grassU.uOrigin : { value: new THREE.Vector2(0, 0) } }),
+    side: THREE.DoubleSide, vertexShader: grassVS, fragmentShader: grassFS,
+  }));
+  mesh.frustumCulled = false; scene.add(mesh); return mesh;
+}
+// Default composition: blades packed in front of the fixed camera, plus a ragged horizon of stubs
+const grassNear = makeGrass(140000, (i, data, rnd, wid) => {
+  const z = 4 - Math.pow(Math.random(), 1.9) * 85, x = (Math.random() - 0.5) * 2 * (6 + Math.abs(z) * 1.4);
+  data.set([x, z, Math.random() * Math.PI, 0.45 + Math.random() * 0.7], i * 4); rnd.set([Math.random() * 6.283, Math.random()], i * 2); wid[i] = 0.05;
+});
+const grassFar = makeGrass(110000, (i, data, rnd, wid) => {          // stubs sized in screen pixels (2–34 ref px tall, mostly low)
+  const d = 110 + Math.pow(Math.random(), 1.3) * 520, x = (Math.random() - 0.5) * 2 * d * 1.7;
+  const hpx = 2 + Math.pow(Math.random(), 1.9) * 32, wpx = 2 + Math.random() * 5;
+  data.set([x, -d, Math.random() * Math.PI, hpx * d / F_REF], i * 4); rnd.set([Math.random() * 6.283, Math.random()], i * 2); wid[i] = wpx * d / F_REF;
+});
+// Walk mode: a meadow that tiles around the player, and a full ring of horizon stubs that travels with them
+const walkNear = makeGrass(170000, (i, data, rnd, wid) => {
+  data.set([(Math.random() - 0.5) * 160, (Math.random() - 0.5) * 160, Math.random() * Math.PI, 0.45 + Math.random() * 0.7], i * 4); rnd.set([Math.random() * 6.283, Math.random()], i * 2); wid[i] = 0.05;
+}, { wrap: 80, origin: true });
+const walkFar = makeGrass(170000, (i, data, rnd, wid) => {
+  const d = 110 + Math.pow(Math.random(), 1.3) * 520, a = Math.random() * Math.PI * 2;
+  const hpx = 2 + Math.pow(Math.random(), 1.9) * 32, wpx = 2 + Math.random() * 5;
+  data.set([Math.cos(a) * d, Math.sin(a) * d, Math.random() * Math.PI, hpx * d / F_REF], i * 4); rnd.set([Math.random() * 6.283, Math.random()], i * 2); wid[i] = wpx * d / F_REF;
+}, { glue: 1, origin: true });
+walkNear.visible = walkFar.visible = false;
+
+/* ------------------------------------------------------------------ *
+ *  Lighting: none but the beacons. No environment map, no sun or sky lights — every 3D object has a fixed
+ *  near-black base (its emissive colour) and only the flashing red point lights ever add light to it.
+ * ------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------ *
+ *  Turbines
+ * ------------------------------------------------------------------ */
+// --- PBR plumbing: every lit surface also writes (distance / GRAIN_DIST) into alpha for the grain pass ---
+const DIST_ALPHA = `gl_FragColor = vec4( outgoingLight, length( vViewPosition ) / ${GRAIN_DIST.toFixed(1)} );`;
+const paint = (hex, rough, metal, key, extra, base = [15, 13, 22]) => {   // base = what the surface looks like with no light on it (the silhouette colour)
+  const m = new THREE.MeshStandardMaterial({ color: rgb(hex), roughness: rough, metalness: metal, emissive: rgb(base) });
+  m.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', DIST_ALPHA); if (extra) extra(sh); };
+  m.customProgramCacheKey = () => key;                              // distinct programs for distinct patches
+  return m;
+};
+const turbPaint = paint([150, 150, 160], 0.5, 0.05, 'turb');         // light paint: only shows when the red beacon hits it
+const turbDark  = paint([60, 60, 70], 0.5, 0.2, 'turbdark', undefined, [10, 10, 16]);
+
+// Tower: three tubular sections with flanged joints
+const towerGeo = (() => {
+  const pts = [new THREE.Vector2(0.01, 0), new THREE.Vector2(2.3, 0), new THREE.Vector2(2.3, 0.5), new THREE.Vector2(1.9, 0.5)];
+  const secs = [[0.5, 27, 1.9, 1.56], [27, 54, 1.6, 1.26], [54, HUB_H, 1.3, 0.92]];
+  secs.forEach(([y0, y1, r0, r1], i) => {
+    pts.push(new THREE.Vector2(r0, y0 + 0.14), new THREE.Vector2(r1, y1));
+    if (i < secs.length - 1) pts.push(new THREE.Vector2(r1 + 0.08, y1), new THREE.Vector2(r1 + 0.08, y1 + 0.14));
+  });
+  pts.push(new THREE.Vector2(0.9, HUB_H + 0.1));
+  return new THREE.LatheGeometry(pts, 40);
+})();
+
+// Nacelle: bevelled rounded housing, plus a rear cooling radiator
+const roundedRect = (w, h, r) => {
+  const s = new THREE.Shape(), x = -w / 2, y = -h / 2;
+  s.moveTo(x + r, y); s.lineTo(x + w - r, y); s.quadraticCurveTo(x + w, y, x + w, y + r);
+  s.lineTo(x + w, y + h - r); s.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  s.lineTo(x + r, y + h); s.quadraticCurveTo(x, y + h, x, y + h - r);
+  s.lineTo(x, y + r); s.quadraticCurveTo(x, y, x + r, y); return s;
+};
+const nacelleGeo = (() => {
+  const g = new THREE.ExtrudeGeometry(roundedRect(9, 3.0, 1.0), { depth: 2.3, bevelEnabled: true, bevelThickness: 0.35, bevelSize: 0.35, bevelSegments: 4, curveSegments: 10 });
+  g.translate(0, 0, -1.15); g.rotateY(-Math.PI / 2);                // shape-x → along the machine (+z is the rotor side)
+  g.translate(0, HUB_H + 0.6, 1.2);
+  const rad = new THREE.BoxGeometry(2.4, 0.5, 2.0).translate(0, HUB_H + 2.5, -2.4);
+  return mergeGeometries([g.toNonIndexed(), rad.toNonIndexed()]);
+})();
+const spinnerGeo = (() => {                                          // ogive nose cone, axis along +z
+  const pts = [new THREE.Vector2(0.01, -1.0), new THREE.Vector2(1.5, -1.0)];
+  for (let i = 0; i <= 16; i++) { const l = (i / 16) * 3.3; pts.push(new THREE.Vector2(1.5 * Math.sqrt(1 - (l / 3.3) ** 2) + 0.01, l)); }
+  const g = new THREE.LatheGeometry(pts, 32); g.rotateX(Math.PI / 2); return g;
+})();
+const mastGeo = (() => {                                             // anemometer mast + wind vane on the nacelle roof
+  const m = new THREE.CylinderGeometry(0.04, 0.04, 1.6, 8).translate(0, HUB_H + 2.9 + 0.8, 1.0);
+  const vane = new THREE.BoxGeometry(0.03, 0.35, 0.9).translate(0, HUB_H + 4.45, 0.6);
+  const cup = new THREE.SphereGeometry(0.16, 8, 6).translate(0.35, HUB_H + 4.5, 1.4);
+  return mergeGeometries([m, vane, cup].map(g => g.toNonIndexed()));
+})();
+
+// Blade: lofted from airfoil sections (NACA-style thickness + a little camber) with taper and twist, round at the root
+const bladeGeo = (() => {
+  const chordT = [[0.9, 1.9], [3, 2.5], [6, 2.9], [13, 2.3], [21, 1.5], [27, 0.85], [ROTOR_R, 0.3]];
+  const thickT = [[0.9, 0.95], [3, 0.7], [6, 0.32], [11, 0.2], [20, 0.15], [ROTOR_R, 0.10]];
+  const interp = (T, r) => { for (let i = 0; i < T.length - 1; i++) if (r <= T[i + 1][0]) { const u = (r - T[i][0]) / (T[i + 1][0] - T[i][0]); return T[i][1] + (T[i + 1][1] - T[i][1]) * u; } return T.at(-1)[1]; };
+  const N = 30, P = 36, pos = [], idx = [];
+  for (let i = 0; i <= N; i++) {
+    const r = 0.9 + (ROTOR_R - 0.9) * Math.pow(i / N, 1.15), c = interp(chordT, r), t = interp(thickT, r);
+    const tw = THREE.MathUtils.degToRad(16 * Math.pow(1 - r / ROTOR_R, 1.6) - 1.0 + 4);
+    for (let j = 0; j < P; j++) {
+      const th = 2 * Math.PI * j / P, x = (1 + Math.cos(th)) / 2, sg = th < Math.PI ? 1 : -1;
+      const yt = 5 * t * (0.2969 * Math.sqrt(x) - 0.126 * x - 0.3516 * x * x + 0.2843 * x ** 3 - 0.1036 * x ** 4);
+      const yl = (0.3 - x) * c, zl = (sg * yt + 0.05 * 4 * x * (1 - x)) * c;
+      pos.push(r, yl * Math.cos(tw) - zl * Math.sin(tw), yl * Math.sin(tw) + zl * Math.cos(tw));
+    }
+  }
+  for (let i = 0; i < N; i++) for (let j = 0; j < P; j++) {
+    const a = i * P + j, b = i * P + (j + 1) % P, c2 = (i + 1) * P + j, d = (i + 1) * P + (j + 1) % P;
+    idx.push(a, c2, b, b, c2, d);
+  }
+  const tipC = pos.length / 3; let cx = 0, cy = 0, cz = 0;
+  for (let j = 0; j < P; j++) { const k = (N * P + j) * 3; cx += pos[k]; cy += pos[k + 1]; cz += pos[k + 2]; }
+  pos.push(cx / P, cy / P, cz / P);
+  for (let j = 0; j < P; j++) idx.push(N * P + j, N * P + (j + 1) % P, tipC);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+  return g;
+})();
+
+const radialTex = stops => {
+  const n = 128, c = document.createElement('canvas'); c.width = c.height = n;
+  const x = c.getContext('2d'), R = n / 2;
+  const g = x.createRadialGradient(R, R, 0, R, R, R);
+  stops.forEach(s => g.addColorStop(s[0], `rgba(${s[1]},${s[2]},${s[3]},${s[4]})`));
+  x.fillStyle = g; x.fillRect(0, 0, n, n);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+};
+// halo profile measured around a light in the reference: [radius/16px, r,g,b, alpha]
+const haloTex = radialTex([[0,255,120,115,1],[2/16,251,113,109,1],[4/16,238,104,102,.92],[6/16,255,81,86,.72],[9/16,255,33,41,.41],[12/16,255,20,35,.13],[1,255,20,35,0]]);
+// tight hot core, drawn additively with HDR colour so the bloom pass has something to chew on
+const coreTex = radialTex([[0,255,255,255,1],[.25,255,255,255,.85],[.55,255,255,255,.28],[1,255,255,255,0]]);
+
+const f = F_REF, TAN_HALF = Math.tan(THREE.MathUtils.degToRad(FOV / 2));
+const spriteScale = refPx => (refPx / REF_H) * 2 * TAN_HALF;        // screen-height fraction → sprite scale
+const turbines = [], farmColliders = [];
+const farm = new THREE.Group(); scene.add(farm);
+
+// --- Beacons: emissive housing + glow sprites + (pooled) real point lights ---
+const beacons = [];
+const housingGeo = new THREE.SphereGeometry(0.35, 12, 8);
+function makeBeacon(parent, p, key) {
+  const mk = (map, px, blending) => {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map, transparent: true, depthWrite: false, sizeAttenuation: false, fog: false, blending }));
+    sp.scale.setScalar(spriteScale(px)); sp.position.copy(p); sp.visible = false; parent.add(sp); return sp;
+  };
+  const housing = new THREE.Mesh(housingGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.1, 0.008, 0.008) }));
+  housing.position.copy(p); parent.add(housing);
+  const obj = new THREE.Object3D(); obj.position.copy(p); parent.add(obj);
+  const b = { key, obj, housing, halo: mk(haloTex, 22, THREE.NormalBlending), core: mk(coreTex, 9, THREE.AdditiveBlending), off: Math.random(), dist: 0 };
+  beacons.push(b); return b;
+}
+// A fixed pool of point lights (a constant light count avoids shader recompiles); each frame they are handed to the nearest active beacons.
+const POOL = 8, BEACON_CD = 260;                                    // candela at full flash
+const lightPool = Array.from({ length: POOL }, () => { const l = new THREE.PointLight(rgb([255, 40, 30]), 0, 28, 2); scene.add(l); return l; });
+
+function addTurbine(px, hubY) {
+  // Keep the highest blade tip a margin below the top of the frame: push a turbine back if its rotor would poke out
+  const dMin = (HUB_H - CAM_H + ROTOR_R * 1.16 + 1) * f / (HORIZON_Y - TOP_MARGIN);
+  const d = Math.max((HUB_H - CAM_H) * f / (HORIZON_Y - hubY), dMin);
+  const x = (px - REF_W / 2) / f * d;
+  const yaw = new THREE.Group();
+  yaw.position.set(x, terrain(x, -d) - 1.5, -d);
+  yaw.add(new THREE.Mesh(towerGeo, turbPaint), new THREE.Mesh(nacelleGeo, turbPaint), new THREE.Mesh(mastGeo, turbDark));
+  const rotor = new THREE.Group(); rotor.position.set(0, HUB_H + 0.6, 5.6);
+  rotor.add(new THREE.Mesh(spinnerGeo, turbPaint));
+  // Each machine gets its own blade length and thickness (±8% / ±12%), and each blade a little more (±3% / ±5%)
+  const rLen = 1 + (Math.random() - 0.5) * 0.16, rThick = 1 + (Math.random() - 0.5) * 0.24;
+  for (let i = 0; i < 3; i++) {
+    const b = new THREE.Mesh(bladeGeo, turbPaint); b.rotation.z = i * Math.PI * 2 / 3 + (Math.random() - 0.5) * 0.03;
+    const th = rThick * (1 + (Math.random() - 0.5) * 0.10);
+    b.scale.set(rLen * (1 + (Math.random() - 0.5) * 0.06), th, th); rotor.add(b);
+  }
+  rotor.rotation.z = Math.random() * 6.28;
+  yaw.add(rotor);
+
+  const T = { yaw, rotor, omega: 0, yawOff: (Math.random() - 0.5) * 0.12, yawPhase: Math.random() * 6.28,
+              rpmK: 0.92 + Math.random() * 0.16, cur: 0, lit: hubY < 340 };
+  if (T.lit) makeBeacon(yaw, new THREE.Vector3(0, HUB_H + 3.7, -3.2), 'farm');   // on the nacelle roof, aft
+  farm.add(yaw); turbines.push(T); farmColliders.push({ x, z: -d, r: 2.4 });
+}
+TURBINES.forEach(([x, y]) => addTurbine(x, y));
+// Fill out the field beyond the reference frame (wide windows) with distant machines
+for (let i = 0; i < 26; i++) {
+  const side = i % 2 ? 1 : -1;
+  addTurbine(REF_W / 2 + side * (REF_W * 0.55 + Math.random() * 1400), 395 + Math.random() * 45);
+}
+
+
+/* ------------------------------------------------------------------ *
+ *  Scene II: transmission pylons — modelled lattice towers (lit), ceramic insulator strings,
+ *  sagging conductors, marker balls on the earth wire, red aviation beacons
+ * ------------------------------------------------------------------ */
+const pylonGroup = new THREE.Group(); pylonGroup.visible = false; scene.add(pylonGroup);
+const latticeU = { uWind: { value: new THREE.Vector2(1, 0) }, uSpeed: { value: 8 }, uT: { value: 0 }, uMinPx: { value: 0.75 }, uF: { value: F_REF } };
+// Thin members vanish at distance, so every beam is widened in the vertex shader to at least ~1 reference pixel.
+// Wires (aSw.w > 0) also blow out downwind and flutter, most at mid-span.
+const widen = sh => {
+  Object.assign(sh.uniforms, latticeU);
+  sh.vertexShader = sh.vertexShader
+    .replace('#include <common>', `#include <common>
+      attribute vec3 aAxis; attribute float aHW; attribute vec4 aSw;
+      uniform vec2 uWind; uniform float uSpeed, uT, uMinPx, uF;`)
+    .replace('#include <begin_vertex>', `
+      vec3 ax = aAxis;
+      float along = ax.x * 0.013 + ax.z * 0.017;
+      float flut = 0.6 * sin(uT * 1.1 + along * 3.0) + 0.4 * sin(uT * 2.3 + along * 5.0 + 1.7);
+      float blow = dot(uWind, aSw.xz) * uSpeed * 0.05;
+      ax += vec3(aSw.x, 0.0, aSw.z) * aSw.w * (blow + flut * 0.35 * clamp(uSpeed / 8.0, 0.0, 1.5));
+      vec3 boff = position - aAxis;
+      float dd = length((modelViewMatrix * vec4(ax, 1.0)).xyz);
+      float sc = max(1.0, (uMinPx * dd / uF) / (2.0 * aHW));
+      vec3 transformed = ax + boff * sc;`);
+};
+const steelPaint = paint([95, 95, 105], 0.5, 0.2, 'steel', widen);   // steel: black until the beacon lights it
+const ceramic = paint([160, 165, 175], 0.25, 0.0, 'ceramic', undefined, [18, 17, 26]);
+const markerPaint = paint([200, 90, 35], 0.5, 0.1, 'marker', undefined, [34, 14, 8]);
+
+const newBeams = () => ({ pos: [], nrm: [], ax: [], hw: [], sw: [], idx: [] });
+const CORN = [[1, 1], [-1, 1], [-1, -1], [1, -1]];
+function addBeam(B, a, b, hw, perp = null, ua = 0, ub = 0) {
+  const dir = new THREE.Vector3().subVectors(b, a), len = dir.length();
+  if (len < 1e-6) return;
+  dir.divideScalar(len);
+  const ref = Math.abs(dir.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
+  const u = new THREE.Vector3().crossVectors(dir, ref).normalize(), v = new THREE.Vector3().crossVectors(dir, u);
+  const corner = (P, c) => [P.x + (u.x * CORN[c][0] + v.x * CORN[c][1]) * hw, P.y + (u.y * CORN[c][0] + v.y * CORN[c][1]) * hw, P.z + (u.z * CORN[c][0] + v.z * CORN[c][1]) * hw];
+  const faceN = [v, u.clone().negate(), v.clone().negate(), u];     // faces: corner0-1, 1-2, 2-3, 3-0
+  for (let f = 0; f < 4; f++) {
+    const base = B.pos.length / 3, c0 = f, c1 = (f + 1) % 4, n = faceN[f];
+    for (const [P, w, c] of [[a, ua, c0], [a, ua, c1], [b, ub, c1], [b, ub, c0]]) {
+      B.pos.push(...corner(P, c)); B.nrm.push(n.x, n.y, n.z); B.ax.push(P.x, P.y, P.z); B.hw.push(hw);
+      B.sw.push(perp ? perp.x : 0, 0, perp ? perp.z : 0, w);
+    }
+    B.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
+}
+const beamGeo = B => {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(B.pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(B.nrm, 3));
+  g.setAttribute('aAxis', new THREE.Float32BufferAttribute(B.ax, 3));
+  g.setAttribute('aHW', new THREE.Float32BufferAttribute(B.hw, 1));
+  g.setAttribute('aSw', new THREE.Float32BufferAttribute(B.sw, 4));
+  g.setIndex(B.idx); return g;
+};
+
+// One lattice tower, built once: tapered four-leg body, three tiers of cross-arms (a "Christmas tree" tower), earth-wire peak.
+const PYLON_ATTACH = [];                                             // local conductor attachment points; the last is the earth wire
+const PYLON_TOP = 56.4;
+const ARMS = [[33, 9.5], [40, 8.0], [46.5, 6.0]];
+for (const [y, L] of ARMS) for (const s of [-1, 1]) PYLON_ATTACH.push(new THREE.Vector3(s * L, y - 2.7, 0));
+PYLON_ATTACH.push(new THREE.Vector3(0, 54.8, 0));
+
+// Pylon shape is configurable: `bars` = horizontal bars in the tower body (each with its X-bracing),
+// `k` = member thickness multiplier. Legs, arms and the peak keep their outline either way.
+const PYLON_CFG = { bars: 9, thickness: 1 };                         // chosen from the grid: C1·T3
+function makePylonGeo(bars, k) {
+  const B = newBeams(), V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+  const W = y => y <= 30 ? 4.5 - 2.9 * (y / 30) : y <= 48 ? 1.6 - 0.8 * ((y - 30) / 18) : 0.8 - 0.45 * ((y - 48) / 4);
+  const corners = [[1, 1], [-1, 1], [-1, -1], [1, -1]], knots = [0, 30, 48, 52];
+  for (let i = 0; i < knots.length - 1; i++) corners.forEach(([sx, sz]) => {
+    const y0 = knots[i], y1 = knots[i + 1];
+    addBeam(B, V3(sx * W(y0), y0, sz * W(y0)), V3(sx * W(y1), y1, sz * W(y1)), (0.2 - 0.1 * (y0 / 52)) * k);   // legs
+  });
+  const ys = Array.from({ length: bars }, (_, i) => 52 * i / (bars - 1));
+  ys.forEach((y, i) => {
+    const w = W(y);
+    corners.forEach(([sx, sz], c) => {
+      const nx = corners[(c + 1) % 4];
+      addBeam(B, V3(sx * w, y, sz * w), V3(nx[0] * w, y, nx[1] * w), 0.08 * k);              // horizontal bar
+      if (i < ys.length - 1) {
+        const y2 = ys[i + 1], w2 = W(y2);
+        const a = (i + c) % 2 ? [sx * w, y, sz * w] : [nx[0] * w, y, nx[1] * w];            // X-bracing, alternating
+        const b = (i + c) % 2 ? [nx[0] * w2, y2, nx[1] * w2] : [sx * w2, y2, sz * w2];
+        addBeam(B, V3(...a), V3(...b), 0.07 * k);
+      }
+    });
+  });
+  ARMS.forEach(([y, L]) => {
+    const yt = y + 3.4;
+    for (const s of [-1, 1]) {
+      const root = V3(s * W(y), y, 0), rootTop = V3(s * W(yt), yt, 0), tip = V3(s * L, y, 0);
+      addBeam(B, root, tip, 0.16 * k);                                                      // lower chord
+      addBeam(B, tip, rootTop, 0.12 * k);                                                   // upper chord: meets the lower chord exactly at the tip
+      addBeam(B, root, new THREE.Vector3().lerpVectors(tip, rootTop, 0.5), 0.07 * k);       // web: ends exactly on the upper chord
+      addBeam(B, root, rootTop, 0.1 * k);                                                   // post up the side of the body
+      for (const yy of [y, yt]) { const w = W(yy);                                          // side-face bars tie the arm root into both legs
+        addBeam(B, V3(s * w, yy, -w), V3(s * w, yy, w), 0.1 * k); }
+    }
+  });
+  addBeam(B, V3(0, 52, 0), V3(0, 55.2, 0), 0.12 * k);                                       // peak
+  corners.forEach(([sx, sz]) => addBeam(B, V3(sx * W(52), 52, sz * W(52)), V3(0, 55.2, 0), 0.08 * k));   // leg tops converge on the peak
+  return beamGeo(B);
+}
+let pylonGeo = makePylonGeo(PYLON_CFG.bars, PYLON_CFG.thickness);
+const pylonMeshes = [];
+// Insulator string: a pin with a stack of ceramic discs and end fittings, hanging from the arm tip
+const insulatorGeo = (() => {
+  const parts = [new THREE.CylinderGeometry(0.05, 0.05, 2.7, 8).translate(0, -1.35, 0), new THREE.CylinderGeometry(0.16, 0.16, 0.3, 10).translate(0, -2.6, 0)];
+  for (let i = 0; i < 12; i++) parts.push(new THREE.CylinderGeometry(0.34, 0.28, 0.09, 14).translate(0, -0.35 - i * 0.19, 0));
+  return mergeGeometries(parts);
+})();
+
+const pylonGroup2 = new THREE.Group(); pylonGroup2.visible = false; scene.add(pylonGroup2);
+const pylonScenes = [pylonGroup, pylonGroup2].map((group, n) => ({ group, key: n ? 'pylon2' : 'pylon', wireB: newBeams(), balls: [], colliders: [] }));
+function addPylonLine(P, start, step, count, lit) {
+  const dir = new THREE.Vector3(step[0], 0, step[1]).normalize(), yaw = Math.atan2(dir.x, dir.z);
+  const perp = new THREE.Vector3(-dir.z, 0, dir.x), towers = [];
+  for (let i = 0; i < count; i++) {
+    const x = start[0] + step[0] * i, z = start[1] + step[1] * i, g = new THREE.Group();
+    g.position.set(x, terrain(x, z) - 0.6, z); g.rotation.y = yaw + (Math.random() - 0.5) * 0.03;
+    g.scale.setScalar(1 + (Math.random() - 0.5) * 0.08);
+    const pm = new THREE.Mesh(pylonGeo, steelPaint); pylonMeshes.push(pm); g.add(pm);
+    ARMS.forEach(([y, L]) => { for (const s of [-1, 1]) { const m = new THREE.Mesh(insulatorGeo, ceramic); m.position.set(s * L, y, 0); g.add(m); } });
+    if (lit(i)) makeBeacon(g, new THREE.Vector3(0, PYLON_TOP, 0), P.key);
+    P.group.add(g); g.updateMatrixWorld(true); towers.push(g); P.colliders.push({ x, z, r: 5.0 * g.scale.x });
+  }
+  for (let i = 0; i < count - 1; i++) PYLON_ATTACH.forEach((la, j) => {
+    const p0 = la.clone().applyMatrix4(towers[i].matrixWorld), p1 = la.clone().applyMatrix4(towers[i + 1].matrixWorld);
+    const earth = j === PYLON_ATTACH.length - 1, sag = p0.distanceTo(p1) * (earth ? 0.02 : 0.03), N = 14;
+    const pt = u => new THREE.Vector3().lerpVectors(p0, p1, u).add(new THREE.Vector3(0, -sag * 4 * u * (1 - u), 0));
+    for (let k = 0; k < N; k++) {
+      const u0 = k / N, u1 = (k + 1) / N;
+      addBeam(P.wireB, pt(u0), pt(u1), earth ? 0.03 : 0.04, perp, Math.sin(Math.PI * u0), Math.sin(Math.PI * u1));
+    }
+    if (earth) for (const u of [0.33, 0.67]) P.balls.push({ p: pt(u), perp, sw: Math.sin(Math.PI * u) });   // aviation marker balls
+  });
+}
+// Scene II: a line marching away from just right of centre, and a distant one running across the field
+addPylonLine(pylonScenes[0], [38, -170], [-52, -175], 9, () => true);
+addPylonLine(pylonScenes[0], [-760, -700], [250, -22], 7, i => i % 2 === 0);
+// Scene III: the line runs straight across the frame, left to right, with a second, more distant row behind it
+addPylonLine(pylonScenes[1], [-420, -215], [115, -12], 9, () => true);
+addPylonLine(pylonScenes[1], [-950, -900], [300, -8], 8, i => i % 2 === 1);
+for (const P of pylonScenes) {
+  const wires = new THREE.Mesh(beamGeo(P.wireB), steelPaint); wires.frustumCulled = false; P.group.add(wires);
+  P.ballMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.7, 14, 10), markerPaint, P.balls.length);
+  P.ballMesh.frustumCulled = false; P.group.add(P.ballMesh);
+}
+const ballDummy = new THREE.Object3D();
+// Same wind response as the wire shader, so each ball rides its wire
+const updateBalls = (time, speed, wind) => {
+  for (const P of pylonScenes) {
+    P.balls.forEach((b, i) => {
+      const along = b.p.x * 0.013 + b.p.z * 0.017;
+      const flut = 0.6 * Math.sin(time * 1.1 + along * 3) + 0.4 * Math.sin(time * 2.3 + along * 5 + 1.7);
+      const off = b.sw * ((wind.x * b.perp.x + wind.y * b.perp.z) * speed * 0.05 + flut * 0.35 * THREE.MathUtils.clamp(speed / 8, 0, 1.5));
+      ballDummy.position.copy(b.p).addScaledVector(b.perp, off); ballDummy.updateMatrix(); P.ballMesh.setMatrixAt(i, ballDummy.matrix);
+    });
+    P.ballMesh.instanceMatrix.needsUpdate = true;
+  }
+};
+
+/* ------------------------------------------------------------------ *
+ *  Scene switching: ← / → / Space, dip-to-black fade
+ * ------------------------------------------------------------------ */
+const SCENES = [
+  { name: 'Windmills', show: on => { farm.visible = on; } },
+  { name: 'Pylons 1',   show: on => { pylonGroup.visible = on; } },
+  { name: 'Pylons 2', show: on => { pylonGroup2.visible = on; } },
+  { name: 'Blank',     show: () => {} },                              // just the dusk sky, ground and swaying grass
+];
+let sceneIdx = 0, pendingScene = -1, fade = 1;
+const sceneBtns = [...document.querySelectorAll('#scenes button[data-i]')];
+const paintScene = () => sceneBtns.forEach((b, i) => b.setAttribute('aria-current', i === sceneIdx || i === pendingScene ? 'true' : 'false'));
+const goScene = i => { i = (i + SCENES.length) % SCENES.length; if (i === sceneIdx && pendingScene < 0) return; pendingScene = i; paintScene(); };
+sceneBtns.forEach(b => b.addEventListener('click', () => goScene(+b.dataset.i)));
+paintScene();
+addEventListener('keydown', e => {
+  const k = e.key;
+  if (k !== 'ArrowLeft' && k !== 'ArrowRight' && k !== ' ' && e.code !== 'Space') return;
+  e.preventDefault(); e.stopPropagation();                           // also stops a focused slider from taking the arrow keys
+  if (e.repeat) return;
+  const base = pendingScene >= 0 ? pendingScene : sceneIdx;
+  goScene(k === 'ArrowLeft' ? base - 1 : base + 1);
+}, true);
+document.querySelectorAll('.line input').forEach(el => el.addEventListener('pointerup', () => el.blur()));
+{ let x0 = null;                                                     // swipe on touch screens
+  addEventListener('touchstart', e => { x0 = e.touches[0].clientX; }, { passive: true });
+  addEventListener('touchend', e => { if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null;
+    if (Math.abs(dx) > 60 && !e.target.closest('.line')) goScene((pendingScene >= 0 ? pendingScene : sceneIdx) + (dx < 0 ? 1 : -1)); }, { passive: true }); }
+
+/* ------------------------------------------------------------------ *
+ *  Walk mode (press E): first person. WASD to move, Shift to run, drag to look.
+ *  Eye height 1.7 m on the real terrain; towers and pylons are solid.
+ * ------------------------------------------------------------------ */
+const EYE = 1.7;
+const walk = { on: false, w: 0, pos: new THREE.Vector3(0, 0, 0), vel: new THREE.Vector2(), yaw: 0, pitch: 0, phase: 0, amp: 0 };
+const keys = new Set(), walkHint = document.getElementById('walkhint'), walkBtn = document.getElementById('walkbtn');
+const setWalk = on => { walk.on = on; document.body.classList.toggle('walking', on); walkBtn.setAttribute('aria-pressed', String(on)); walkHint.classList.toggle('on', on); keys.clear(); };
+walkBtn.addEventListener('click', () => { setWalk(!walk.on); walkBtn.blur(); });
+addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (k === 'e' && !e.repeat && !e.metaKey && !e.ctrlKey) { setWalk(!walk.on); return; }
+  if (walk.on && ('wasd'.includes(k) && k.length === 1 || k === 'shift')) keys.add(k);
+});
+addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
+addEventListener('blur', () => keys.clear());
+{ let drag = null;                                                   // drag to look around
+  canvas.addEventListener('pointerdown', e => { if (!walk.on) return; drag = { x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId); document.body.classList.add('dragging'); });
+  canvas.addEventListener('pointermove', e => {
+    if (!drag) return;
+    walk.yaw -= (e.clientX - drag.x) * 0.004; walk.pitch = THREE.MathUtils.clamp(walk.pitch + (e.clientY - drag.y) * 0.004, -1.35, 1.35);
+    drag.x = e.clientX; drag.y = e.clientY;
+  });
+  const end = () => { drag = null; document.body.classList.remove('dragging'); };
+  canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end); }
+
+const COLLIDERS = () => [farmColliders, pylonScenes[0].colliders, pylonScenes[1].colliders, []][sceneIdx] || [];
+const camDefault = new THREE.Vector3(0, CAM_Y, 0), camDefaultTarget = new THREE.Vector3(0, CAM_Y, -200), eyeV = new THREE.Vector3(), lookDir = new THREE.Vector3(), lookV = new THREE.Vector3();
+function updateWalk(dt) {
+  walk.w += ((walk.on ? 1 : 0) - walk.w) * (1 - Math.exp(-dt / 0.45));
+  const s = walk.w * walk.w * (3 - 2 * walk.w), pos = walk.pos;
+  if (walk.on) {
+    const ix = (keys.has('d') ? 1 : 0) - (keys.has('a') ? 1 : 0), iz = (keys.has('w') ? 1 : 0) - (keys.has('s') ? 1 : 0), len = Math.hypot(ix, iz);
+    const want = len ? (keys.has('shift') ? 7 : 2.6) : 0;
+    const fx = -Math.sin(walk.yaw), fz = -Math.cos(walk.yaw), rx = Math.cos(walk.yaw), rz = -Math.sin(walk.yaw);   // yaw 0 = looking down -z, like the fixed camera
+    const a = 1 - Math.exp(-dt / 0.12);
+    walk.vel.x += ((len ? (rx * ix + fx * iz) / len : 0) * want - walk.vel.x) * a;
+    walk.vel.y += ((len ? (rz * ix + fz * iz) / len : 0) * want - walk.vel.y) * a;
+    pos.x += walk.vel.x * dt; pos.z += walk.vel.y * dt;
+    const rr = Math.hypot(pos.x, pos.z); if (rr > 1800) { pos.x *= 1800 / rr; pos.z *= 1800 / rr; }   // edge of the world
+    for (const c of COLLIDERS()) {                                    // can't walk through towers and pylons
+      const dx = pos.x - c.x, dz = pos.z - c.z, d = Math.hypot(dx, dz), min = c.r + 0.35;
+      if (d < min && d > 1e-4) { pos.x = c.x + dx / d * min; pos.z = c.z + dz / d * min; }
+    }
+    const sp = walk.vel.length();
+    walk.phase += dt * sp * 2 * Math.PI / (1.6 + 0.25 * Math.max(0, sp - 2.6));                    // stride lengthens as you speed up
+    walk.amp += (Math.min(1.3, sp / 2.6) - walk.amp) * (1 - Math.exp(-dt / 0.15));
+  } else { walk.vel.multiplyScalar(0); walk.amp *= Math.exp(-dt / 0.15); }
+
+  // camera: eases between the fixed composition and the eye-level view
+  const gy = terrain(pos.x, pos.z), bob = Math.sin(walk.phase * 2) * 0.035 * walk.amp, sway = Math.sin(walk.phase) * 0.02 * walk.amp;
+  eyeV.set(pos.x + Math.cos(walk.yaw) * sway, gy + EYE + bob, pos.z - Math.sin(walk.yaw) * sway);
+  const cp = Math.cos(walk.pitch);
+  lookDir.set(-Math.sin(walk.yaw) * cp, Math.sin(walk.pitch), -Math.cos(walk.yaw) * cp);
+  camera.position.lerpVectors(camDefault, eyeV, s);
+  camera.lookAt(lookV.lerpVectors(camDefaultTarget, lookV.copy(eyeV).addScaledVector(lookDir, 100), s));
+  if (Math.abs(s - viewDims.s) > 1e-4) applyView(s);
+  sky.position.copy(camera.position);                                // the sky dome travels with the camera
+  grassU.uOrigin.value.set(pos.x, pos.z);
+  walkNear.visible = walkFar.visible = walk.w > 0.02;
+  grassNear.visible = grassFar.visible = walk.w < 0.9;
+}
+
+// Default blink interval: a 2 s base stretched by (lit windmills × 2), so the farm blinks lazily and out of step
+{
+  const lit = turbines.filter(T => T.lit).length, el = document.getElementById('int');
+  el.value = 2 * lit * 2; el.dispatchEvent(new Event('input'));
+}
+
+/* ------------------------------------------------------------------ *
+ *  Post: bloom (bright pass → 4 blurred mips) + film grain
+ * ------------------------------------------------------------------ */
+const fsVert = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
+const fsq = new THREE.Mesh(new THREE.PlaneGeometry(2, 2)); fsq.frustumCulled = false;
+const fsScene = new THREE.Scene(); fsScene.add(fsq);
+const fsCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+const mkMat = (frag, uniforms) => new THREE.ShaderMaterial({ vertexShader: fsVert, fragmentShader: frag, uniforms, depthTest: false, depthWrite: false });
+const run = (mat, target) => { fsq.material = mat; renderer.setRenderTarget(target); renderer.render(fsScene, fsCam); };
+
+const brightMat = mkMat(`uniform sampler2D tex; uniform float uT; varying vec2 vUv;
+  void main(){ vec3 c = texture2D(tex, vUv).rgb; gl_FragColor = vec4(max(c - uT, 0.0), 1.0); }`,
+  { tex: { value: null }, uT: { value: 0.3 } });
+const copyMat = mkMat(`uniform sampler2D tex; varying vec2 vUv; void main(){ gl_FragColor = texture2D(tex, vUv); }`, { tex: { value: null } });
+const blurMat = mkMat(`uniform sampler2D tex; uniform vec2 uD; varying vec2 vUv;
+  void main(){
+    vec3 s = texture2D(tex, vUv).rgb * 0.2270270;
+    s += (texture2D(tex, vUv + uD * 1.3846).rgb + texture2D(tex, vUv - uD * 1.3846).rgb) * 0.3162162;
+    s += (texture2D(tex, vUv + uD * 3.2308).rgb + texture2D(tex, vUv - uD * 3.2308).rgb) * 0.0702703;
+    gl_FragColor = vec4(s, 1.0); }`, { tex: { value: null }, uD: { value: new THREE.Vector2() } });
+const LEVELS = 4;
+const mips = Array.from({ length: LEVELS }, () => ({ a: new THREE.WebGLRenderTarget(4, 4, { ...HF, depthBuffer: false }),
+                                                     b: new THREE.WebGLRenderTarget(4, 4, { ...HF, depthBuffer: false }) }));
+
+const finalMat = mkMat(`
+  uniform sampler2D tScene, tB0, tB1, tB2, tB3; uniform vec2 uRes; uniform float uT, uAmt, uBloom, uWarp, uFade; varying vec2 vUv;
+  float hash(vec2 p){ vec3 q = fract(vec3(p.xyx) * .1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
+  float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+    return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y) - 0.5; }
+  vec3 lin2srgb(vec3 c){ return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
+  void main(){
+    vec2 p = gl_FragCoord.xy * (605.0 / uRes.y);                   // work in reference-pixel units
+    float fr = floor(uT * 24.0);
+    vec2 o = vec2(fr * 17.13, fr * 5.71);
+    // Grain is a distortion, not just a tint: two independent fine noise fields push the sample
+    // position around (in ref pixels), so edges, blade tips and light halos get ragged and shimmer.
+    float k = clamp(texture2D(tScene, vUv).a, 0.0, 1.0);             // distance / GRAIN_DIST: grain grows with distance from the camera
+    vec2 warp = k * (vec2(vn(p / 2.3 + o + 7.3), vn(p / 2.3 + o * 1.3 + 19.1)) * uWarp
+              + vec2(vn(p / 7.0 + o * 0.5 + 3.7), vn(p / 7.0 + o * 0.7 + 29.9)) * uWarp * 0.6);
+    vec2 uv = vUv + warp / 605.0 * vec2(uRes.y / uRes.x, 1.0);
+    vec4 s = texture2D(tScene, uv);
+    vec3 bloom = texture2D(tB0, uv).rgb * 1.0 + texture2D(tB1, uv).rgb * 0.8 + texture2D(tB2, uv).rgb * 0.6 + texture2D(tB3, uv).rgb * 0.45;
+    vec3 c = s.rgb + bloom * uBloom;
+    // fine layer (~1.5px correlation) + coarse blotch layers, achromatic like the reference
+    float g = vn(p / 1.9 + o) * 0.80 + vn(p / 3.4 + o * 1.7 + 11.0) * 0.38 + vn(p / 9.0 + o * 0.6 + 40.0) * 0.18;
+    // clamp to the displayable range *before* fading: HDR lights (values ≫ 1) would otherwise stay clipped-white until the fade is nearly black
+    vec3 disp = lin2srgb(clamp(c, 0.0, 1.0));                         // linear light → display, then grain in display units
+    gl_FragColor = vec4(clamp(disp + g * uAmt * k, 0.0, 1.0) * uFade, 1.0);                    // whole frame is grained, strength ∝ distance
+  }`,
+  { tScene: { value: rt.texture }, tB0: { value: null }, tB1: { value: null }, tB2: { value: null }, tB3: { value: null },
+    uRes: { value: new THREE.Vector2(1, 1) }, uT: { value: 0 }, uAmt: { value: 1 }, uBloom: { value: 1 }, uWarp: { value: 0 }, uFade: { value: 1 } });
+const GRAIN_WARP = 2.0;                                             // distortion strength: edges jitter by roughly ±0.5 ref px
+const GRAIN_BASE = 0.185;                                           // calibrated so flat-sky std ≈ 9/255
+
+/* ------------------------------------------------------------------ *
+ *  Resize
+ * ------------------------------------------------------------------ */
+const WALK_FOV = 58, viewDims = { W: 1, H: 1, s: 0 };
+// s = 0: the fixed telephoto composition (horizon at its reference height); s = 1: wide third-person follow camera
+function applyView(s) {
+  viewDims.s = s;
+  camera.fov = FOV + (WALK_FOV - FOV) * s;
+  camera.setViewOffset(viewDims.W, viewDims.H, 0, -(HORIZON_Y / REF_H - 0.5) * viewDims.H * (1 - s), viewDims.W, viewDims.H);
+  camera.updateProjectionMatrix();
+}
+function resize() {
+  const dpr = Math.min(devicePixelRatio || 1, 2), w = innerWidth, h = innerHeight;
+  renderer.setPixelRatio(dpr); renderer.setSize(w, h, false);
+  const W = Math.floor(w * dpr), H = Math.floor(h * dpr);
+  rt.setSize(W, H);
+  mips.forEach((m, i) => { const s = 2 ** (i + 1); m.a.setSize(Math.max(2, W / s | 0), Math.max(2, H / s | 0)); m.b.setSize(Math.max(2, W / s | 0), Math.max(2, H / s | 0)); });
+  camera.aspect = w / h;
+  // shift the principal point so the horizon sits at its reference height (460/605 down the frame)
+  viewDims.W = W; viewDims.H = H; applyView(viewDims.s);
+  finalMat.uniforms.uRes.value.set(W, H);
+}
+addEventListener('resize', resize); resize();
+
+/* ------------------------------------------------------------------ *
+ *  Loop
+ * ------------------------------------------------------------------ */
+const lineSliders = [...document.querySelectorAll('.line')].map((el, i) => ({ input: el.querySelector('input'), canvas: el.querySelector('canvas'), seed: i * 7.31 }));
+// Solid white line up to the value, blending over a few pixels into a faint line that barely wobbles.
+function drawSliders(time) {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  for (const sl of lineSliders) {
+    const c = sl.canvas, w = c.clientWidth, h = c.clientHeight;
+    if (!w) continue;
+    if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+    const g = c.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+    const inp = sl.input, min = +inp.min, max = +inp.max;
+    const x = (inp.value - min) / (max - min) * w, y = Math.round(h / 2) + 0.5;
+    const top = [], bot = [];
+    for (let px = 0; px <= w + 0.01; px += 1) {
+      const d = px - x;
+      const u = Math.min(1, Math.max(0, (d + 4) / 8)), sm = u * u * (3 - 2 * u);
+      const half = (1.5 - 0.5 * sm) / 2;
+      const ease = Math.min(1, Math.max(0, d) / 16);
+      const cy = y + (Math.sin(px * 0.35 + time * 7 + sl.seed) * 0.35 + Math.sin(px * 0.13 - time * 4.3 + sl.seed * 2.0) * 0.25) * ease;
+      top.push(px, cy - half); bot.push(px, cy + half);
+    }
+    const gr = g.createLinearGradient(0, 0, w, 0);
+    const a = Math.min(1, Math.max(0, (x - 4) / w)), b = Math.min(1, Math.max(a, (x + 4) / w));
+    gr.addColorStop(0, '#ffffff'); gr.addColorStop(a, '#ffffff');
+    gr.addColorStop(b, 'rgba(255,255,255,0.35)'); gr.addColorStop(1, 'rgba(255,255,255,0.35)');
+    g.fillStyle = gr;
+    g.beginPath(); g.moveTo(top[0], top[1]);
+    for (let i = 2; i < top.length; i += 2) g.lineTo(top[i], top[i + 1]);
+    for (let i = bot.length - 2; i >= 0; i -= 2) g.lineTo(bot[i], bot[i + 1]);
+    g.closePath(); g.fill();
+  }
+}
+
+const clock = new THREE.Clock();
+let t = 0, phase = 0, gustSm = 0;
+const wrapPI = a => Math.atan2(Math.sin(a), Math.cos(a));
+const tmpV = new THREE.Vector3();
+
+function renderFrame() {
+  renderer.setRenderTarget(rt); renderer.render(scene, camera);
+  if (V.bloom > 0) {
+    brightMat.uniforms.tex.value = rt.texture; run(brightMat, mips[0].a);
+    for (let i = 0; i < LEVELS; i++) {
+      const m = mips[i], sz = m.a.width, szy = m.a.height;
+      blurMat.uniforms.tex.value = m.a.texture; blurMat.uniforms.uD.value.set(1 / sz, 0); run(blurMat, m.b);
+      blurMat.uniforms.tex.value = m.b.texture; blurMat.uniforms.uD.value.set(0, 1 / szy); run(blurMat, m.a);
+      if (i < LEVELS - 1) { copyMat.uniforms.tex.value = m.a.texture; run(copyMat, mips[i + 1].a); }
+    }
+  }
+  const u = finalMat.uniforms;
+  u.tB0.value = mips[0].a.texture; u.tB1.value = mips[1].a.texture; u.tB2.value = mips[2].a.texture; u.tB3.value = mips[3].a.texture;
+  u.uT.value = t; u.uAmt.value = V.grain * GRAIN_BASE; u.uWarp.value = V.grain * GRAIN_WARP; u.uBloom.value = V.bloom;
+  run(finalMat, null);
+}
+
+function update(dt) {
+  t += dt;
+  smoothControls(dt);
+  drawSliders(performance.now() / 1000);
+
+  // wind: base speed + slow gusts
+  const gustN = Math.sin(t * 0.37) * 0.6 + Math.sin(t * 0.91 + 1.7) * 0.3 + Math.sin(t * 2.3) * 0.1;
+  gustSm += (gustN - gustSm) * Math.min(1, dt * 2);
+  const v = Math.max(0, V.speed * (1 + 0.25 * V.gust * gustSm));
+  phase += dt * (0.6 + v * 0.55);
+
+  const toward = THREE.MathUtils.degToRad(V.dir + 180);            // direction the air moves
+  grassU.uWind.value.set(Math.sin(toward), -Math.cos(toward)); grassU.uSpeed.value = v; grassU.uSway.value = V.sway;
+  grassU.uGust.value = V.gust; grassU.uPhase.value = phase; grassU.uTime.value = t;
+
+  // turbines: yaw into the wind, rotor speed follows wind via a cut-in / rated curve
+  const targetYaw = Math.PI - THREE.MathUtils.degToRad(V.dir);
+  const rated = THREE.MathUtils.clamp((v - 2.5) / 8.5, 0, 1);
+  for (const T of turbines) {
+    const wob = Math.sin(t * 0.13 + T.yawPhase) * 0.05 * (0.3 + V.gust);
+    T.cur += wrapPI(targetYaw + T.yawOff + wob - T.cur) * Math.min(1, dt * 0.8);
+    T.yaw.rotation.y = T.cur;
+    const target = 1.7 * rated * T.rpmK;
+    T.omega += (target - T.omega) * Math.min(1, dt * 0.6);        // rotor inertia
+    T.rotor.rotation.z -= T.omega * dt;
+  }
+  // pylon wires + lights
+  latticeU.uT.value = t; latticeU.uSpeed.value = v; latticeU.uWind.value.set(Math.sin(toward), -Math.cos(toward));
+  updateBalls(t, v, latticeU.uWind.value);
+  // beacons: flash envelope → glow sprites, emissive housing, and a real point light for the nearest few
+  const key = ['farm', 'pylon', 'pylon2'][sceneIdx] || '';
+  const P11 = camera.projectionMatrix.elements[5], pooled = [];
+  for (const b of beacons) {
+    const fp = (t + b.off * S.interval) % S.interval;
+    const env = S.hold ? 1 : fp < S.flashDur ? Math.sin(Math.PI * Math.pow(fp / S.flashDur, 0.6)) : 0;
+    b.env = env;
+    // constant screen size from far away (the reference look); physical size once you are close enough for it to matter
+    b.obj.getWorldPosition(tmpV); const dist = Math.max(0.5, tmpV.distanceTo(camera.position));
+    b.halo.scale.setScalar(Math.max(22 / REF_H * 2 / P11, 3.2 / dist));
+    b.core.scale.setScalar(Math.max(9 / REF_H * 2 / P11, 1.3 / dist));
+    b.halo.visible = b.core.visible = env > 0.01;
+    b.halo.material.opacity = env;
+    b.core.material.color.setRGB(5.0 * env, 0.8 * env, 0.6 * env);                 // HDR (linear): feeds the bloom
+    b.housing.material.color.setRGB(0.1 + 6 * env, 0.008 + 0.9 * env, 0.008 + 0.7 * env);
+    if (b.key === key) pooled.push(b);
+  }
+  if (pooled.length > POOL) {
+    pooled.forEach(b => { b.obj.getWorldPosition(tmpV); b.dist = tmpV.distanceTo(camera.position); });
+    pooled.sort((a, b) => a.dist - b.dist);
+  }
+  lightPool.forEach((l, n) => {
+    const b = pooled[n];
+    if (b && b.env > 0.01) { b.obj.getWorldPosition(l.position); l.intensity = BEACON_CD * b.env; } else l.intensity = 0;
+  });
+  // scene change: fade out, swap, fade in
+  const target = pendingScene >= 0 ? 0 : 1;
+  fade += (target - fade) * (1 - Math.exp(-dt / 0.11));
+  if (pendingScene >= 0 && fade < 0.03) {
+    SCENES[sceneIdx].show(false); sceneIdx = pendingScene; pendingScene = -1; SCENES[sceneIdx].show(true); paintScene();
+  }
+  finalMat.uniforms.uFade.value = fade;
+  updateWalk(dt);
+}
+function frame() {
+  update(Math.min(clock.getDelta(), 0.05));
+  renderFrame();
+  requestAnimationFrame(frame);
+}
+frame();
+
+// Debug helper: render one frame and return mean/std of a region given in reference pixels
+window.__sample = (x0, y0, x1, y1) => {
+  const w = renderer.domElement.width, h = renderer.domElement.height, k = h / REF_H;
+  renderFrame();
+  const gl = renderer.getContext(), X0 = Math.floor(x0 * k), Y0 = Math.floor(y0 * k), W = Math.max(1, Math.floor((x1 - x0) * k)), Hh = Math.max(1, Math.floor((y1 - y0) * k));
+  const buf = new Uint8Array(W * Hh * 4); gl.readPixels(X0, h - (Y0 + Hh), W, Hh, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+  const m = [0,0,0], s = [0,0,0], n = W * Hh;
+  for (let i = 0; i < n; i++) for (let c = 0; c < 3; c++) m[c] += buf[i*4+c];
+  for (let c = 0; c < 3; c++) m[c] /= n;
+  for (let i = 0; i < n; i++) for (let c = 0; c < 3; c++) s[c] += (buf[i*4+c] - m[c]) ** 2;
+  return { mean: m.map(v => +v.toFixed(1)), std: s.map(v => +Math.sqrt(v / n).toFixed(1)), size: [w, h] };
+};
+// Debug: expose settings (__S.hold = true keeps the lights lit)
+window.__go = i => { SCENES[sceneIdx].show(false); sceneIdx = (i + SCENES.length) % SCENES.length; pendingScene = -1; SCENES[sceneIdx].show(true); paintScene(); fade = 1; };
+window.__fade = f => { fade = f; finalMat.uniforms.uFade.value = f; };
+window.__S = S; window.__V = V; window.__camera = camera; window.__walk = walk; window.__setWalk = setWalk;
+</script>
+</body>
+</html>

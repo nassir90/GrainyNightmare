@@ -1,0 +1,13 @@
+name = "grainy"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# Served at mpts.ie/games/grainy (and anything under it)
+routes = [
+  { pattern = "mpts.ie/games/grainy*", zone_name = "mpts.ie" }
+]
+
+# The static page and its reference image live in ./public (copied in by deploy.sh)
+[assets]
+directory = "./public"
+binding = "ASSETS"

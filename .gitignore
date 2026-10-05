@@ -1,0 +1,5 @@
+worker/public/
+worker/node_modules/
+worker/.wrangler/
+.DS_Store
+node_modules/
