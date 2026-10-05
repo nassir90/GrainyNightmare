@@ -767,7 +767,7 @@ joyHome(); addEventListener('resize', () => { if (stick.id === null) joyHome(); 
       return;
     }
     const l = looks.get(e.pointerId); if (!l) return;
-    walk.yaw -= (e.clientX - l.x) * l.k; walk.pitch = THREE.MathUtils.clamp(walk.pitch + (e.clientY - l.y) * l.k, -1.35, 1.35);
+    walk.yaw -= (e.clientX - l.x) * l.k; walk.pitch = THREE.MathUtils.clamp(walk.pitch - (e.clientY - l.y) * l.k, -1.35, 1.35);   // drag down = look down
     l.x = e.clientX; l.y = e.clientY;
   });
   const end = e => {
