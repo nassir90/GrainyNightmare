@@ -32,16 +32,9 @@
   .scenes .squeeze { transform-origin:left center; }
   .scenes .walk { margin-top:8px; }
   .scenes .walk[aria-pressed="true"] { opacity:1; }
-  .walkhint { position:fixed; left:50%; bottom:calc(18px + env(safe-area-inset-bottom, 0px)); transform:translateX(-50%); font-size:13px; letter-spacing:.05em; text-transform:uppercase;
-    text-shadow:0 0 6px rgba(0,0,0,.7); opacity:0; transition:opacity .6s; pointer-events:none; white-space:nowrap; }
-  .walkhint.on { opacity:.55; }
-  .walkhint.hidden-ui { display:none; }
   body.walking canvas#c { cursor:grab; } body.walking.dragging canvas#c { cursor:grabbing; }
   canvas#c { touch-action:none; -webkit-user-select:none; user-select:none; }
   /* touch layout: nothing but the world while walking; a floating joystick bottom-left, drag anywhere else to look */
-  body.touch .walkhint { bottom:auto; top:calc(18px + env(safe-area-inset-top, 0px)); left:16px; transform:none; max-width:calc(100vw - 120px); white-space:normal; line-height:1.3; }
-  body.touch .walkhint .squeeze { transform:none; }
-  .walkhint .t { display:none; } body.touch .walkhint .t { display:inline; } body.touch .walkhint .d { display:none; }
   body.touch.walking .scenes, body.touch.walking .controls { opacity:0; pointer-events:none; }
   .joy { position:fixed; left:0; top:0; width:0; height:0; pointer-events:none; opacity:0; transition:opacity .4s; }
   body.touch.walking .joy { opacity:1; }
@@ -51,7 +44,7 @@
   .topbtn { position:fixed; right:calc(16px + env(safe-area-inset-right, 0px)); top:calc(14px + env(safe-area-inset-top, 0px)); font:inherit; font-size:14px; letter-spacing:.06em; text-transform:uppercase;
     color:#fff; background:rgba(14,14,16,.45); border:1px solid rgba(255,255,255,.35); border-radius:2px; padding:6px 10px; cursor:pointer; display:none; text-shadow:0 0 6px rgba(0,0,0,.6); }
   body.touch #hudbtn { display:block; } body.touch.walking #hudbtn { display:none; }
-  body.walking #exitbtn { display:block; }
+  body.touch.walking #exitbtn { display:block; }
   .controls, .scenes { padding-bottom:env(safe-area-inset-bottom, 0px); }
 </style>
 </head>
@@ -69,7 +62,6 @@
   <label for="refop"><span class="squeeze" id="o_refop" data-name="Ref">Ref</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="refop" type="range" min="0" max="1" step="0.01" value="0"></div>
 </div>
 
-<div class="walkhint" id="walkhint"><span class="squeeze"><span class="d">WASD move · Shift run · drag to look · E back</span><span class="t">left thumb moves · drag anywhere else to look</span></span></div>
 <div class="joy idle" id="joy"><div class="base" id="joybase"></div><div class="knob" id="joyknob"></div></div>
 <button class="topbtn" id="hudbtn" type="button">HUD</button>
 <button class="topbtn" id="exitbtn" type="button">Exit</button>
@@ -196,7 +188,7 @@ bind('grain','grain', v => v.toFixed(2) + '×');
     clearTimeout(timer); timer = setTimeout(() => { out.textContent = out.dataset.name; }, 900);
   });
 }
-addEventListener('keydown', e => { if (e.key === 'h' || e.key === 'H') [document.getElementById('controls'), document.getElementById('scenes'), document.getElementById('walkhint')].forEach(e => e.classList.toggle('hidden-ui')); });
+addEventListener('keydown', e => { if (e.key === 'h' || e.key === 'H') [document.getElementById('controls'), document.getElementById('scenes')].forEach(e => e.classList.toggle('hidden-ui')); });
 
 /* ------------------------------------------------------------------ *
  *  Sky dome: sampled gradient down to the horizon + horizontal tint
@@ -732,8 +724,8 @@ document.querySelectorAll('.line input').forEach(el => el.addEventListener('poin
  * ------------------------------------------------------------------ */
 const EYE = 1.7;
 const walk = { on: false, w: 0, pos: new THREE.Vector3(0, 0, 0), vel: new THREE.Vector2(), yaw: 0, pitch: 0, phase: 0, amp: 0 };
-const keys = new Set(), walkHint = document.getElementById('walkhint'), walkBtn = document.getElementById('walkbtn');
-const setWalk = on => { walk.on = on; document.body.classList.toggle('walking', on); walkBtn.setAttribute('aria-pressed', String(on)); walkHint.classList.toggle('on', on); keys.clear(); };
+const keys = new Set(), walkBtn = document.getElementById('walkbtn');
+const setWalk = on => { walk.on = on; document.body.classList.toggle('walking', on); walkBtn.setAttribute('aria-pressed', String(on)); keys.clear(); };
 walkBtn.addEventListener('click', () => { setWalk(!walk.on); walkBtn.blur(); });
 addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
@@ -776,7 +768,7 @@ joyHome(); addEventListener('resize', () => { if (stick.id === null) joyHome(); 
   };
   canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end); }
 document.getElementById('exitbtn').addEventListener('click', () => setWalk(false));
-document.getElementById('hudbtn').addEventListener('click', () => [document.getElementById('controls'), document.getElementById('scenes'), document.getElementById('walkhint')].forEach(e => e.classList.toggle('hidden-ui')));
+document.getElementById('hudbtn').addEventListener('click', () => [document.getElementById('controls'), document.getElementById('scenes')].forEach(e => e.classList.toggle('hidden-ui')));
 
 const PORTRAIT_YAW = [0, 4, -4.5, 0];                                // degrees right (+) / left (−), indexed by scene
 const COLLIDERS = () => [farmColliders, pylonScenes[0].colliders, pylonScenes[1].colliders, []][sceneIdx] || [];
