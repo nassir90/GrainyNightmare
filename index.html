@@ -792,6 +792,14 @@ document.getElementById('exitbtn').addEventListener('click', () => setWalk(false
 
 const PORTRAIT_YAW = [0, 4, -4.5, 0];                                // degrees right (+) / left (−), indexed by scene
 const COLLIDERS = () => [farmColliders, pylonScenes[0].colliders, pylonScenes[1].colliders, []][sceneIdx] || [];
+// Cinematic lag: the camera does not follow input directly but is pulled toward it by a critically damped spring
+// (damping ratio 1: the fastest settle with no overshoot, so it feels weighty but never wobbles). Exact solution, so it is frame-rate independent.
+const OM_LOOK = 26, OM_MOVE = 18;                                    // spring stiffness in rad/s; higher = tighter. Settles in roughly 4/ω seconds.
+const damp = (x, v, target, omega, dt) => {
+  const e = Math.exp(-omega * dt), dx = x - target, t = (v + omega * dx) * dt;
+  return [target + (dx + t) * e, (v - omega * t) * e];
+};
+const cam = { yaw: 0, pitch: 0, vyaw: 0, vpitch: 0, pos: new THREE.Vector3(), vel: new THREE.Vector3(), ready: false };
 const camDefault = new THREE.Vector3(0, CAM_Y, 0), camDefaultTarget = new THREE.Vector3(0, CAM_Y, -200), eyeV = new THREE.Vector3(), lookDir = new THREE.Vector3(), lookV = new THREE.Vector3();
 function updateWalk(dt) {
   walk.w += ((walk.on ? 1 : 0) - walk.w) * (1 - Math.exp(-dt / 0.45));
@@ -803,7 +811,7 @@ function updateWalk(dt) {
     if (stick.id !== null && sm > 0.08) {                              // analog: push further to go faster, past ~70% to run
       sx = stick.x / sm; sz = -stick.y / sm; slen = 1; want = sm < 0.7 ? 2.6 * sm / 0.7 : 2.6 + (sm - 0.7) / 0.3 * 4.4;
     }
-    const fx = -Math.sin(walk.yaw), fz = -Math.cos(walk.yaw), rx = Math.cos(walk.yaw), rz = -Math.sin(walk.yaw);   // yaw 0 = looking down -z, like the fixed camera
+    const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw), rx = Math.cos(cam.yaw), rz = -Math.sin(cam.yaw);   // yaw 0 = looking down -z, like the fixed camera
     const a = 1 - Math.exp(-dt / 0.12);
     walk.vel.x += ((slen ? (rx * sx + fx * sz) / slen : 0) * want - walk.vel.x) * a;
     walk.vel.y += ((slen ? (rz * sx + fz * sz) / slen : 0) * want - walk.vel.y) * a;
@@ -820,9 +828,14 @@ function updateWalk(dt) {
 
   // camera: eases between the fixed composition and the eye-level view
   const gy = terrain(pos.x, pos.z), bob = Math.sin(walk.phase * 2) * 0.035 * walk.amp, sway = Math.sin(walk.phase) * 0.02 * walk.amp;
-  eyeV.set(pos.x + Math.cos(walk.yaw) * sway, gy + EYE + bob, pos.z - Math.sin(walk.yaw) * sway);
-  const cp = Math.cos(walk.pitch);
-  lookDir.set(-Math.sin(walk.yaw) * cp, Math.sin(walk.pitch), -Math.cos(walk.yaw) * cp);
+  const tx = pos.x + Math.cos(walk.yaw) * sway, ty = gy + EYE + bob, tz = pos.z - Math.sin(walk.yaw) * sway;
+  if (!cam.ready) { cam.yaw = walk.yaw; cam.pitch = walk.pitch; cam.pos.set(tx, ty, tz); cam.ready = true; }
+  [cam.yaw, cam.vyaw] = damp(cam.yaw, cam.vyaw, walk.yaw, OM_LOOK, dt);
+  [cam.pitch, cam.vpitch] = damp(cam.pitch, cam.vpitch, walk.pitch, OM_LOOK, dt);
+  for (const [k, target] of [['x', tx], ['y', ty], ['z', tz]]) { const [p, v] = damp(cam.pos[k], cam.vel[k], target, OM_MOVE, dt); cam.pos[k] = p; cam.vel[k] = v; }
+  eyeV.copy(cam.pos);
+  const cp = Math.cos(cam.pitch);
+  lookDir.set(-Math.sin(cam.yaw) * cp, Math.sin(cam.pitch), -Math.cos(cam.yaw) * cp);
   camera.position.lerpVectors(camDefault, eyeV, s);
   camDefaultTarget.x = 200 * Math.tan(THREE.MathUtils.degToRad(PORTRAIT_YAW[sceneIdx] * (1 - framing(viewDims.W / viewDims.H).t)));   // in portrait, turn toward each scene's key subject
   camera.lookAt(lookV.lerpVectors(camDefaultTarget, lookV.copy(eyeV).addScaledVector(lookDir, 100), s));
@@ -1070,7 +1083,7 @@ window.__sample = (x0, y0, x1, y1) => {
 // Debug: expose settings (__S.hold = true keeps the lights lit)
 window.__go = i => { SCENES[sceneIdx].show(false); sceneIdx = (i + SCENES.length) % SCENES.length; pendingScene = -1; SCENES[sceneIdx].show(true); paintScene(); fade = 1; };
 window.__fade = f => { fade = f; finalMat.uniforms.uFade.value = f; };
-window.__S = S; window.__V = V; window.__camera = camera; window.__walk = walk; window.__setWalk = setWalk;
+window.__cam = cam; window.__S = S; window.__V = V; window.__camera = camera; window.__walk = walk; window.__setWalk = setWalk;
 </script>
 </body>
 </html>

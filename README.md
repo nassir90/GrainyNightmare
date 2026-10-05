@@ -85,6 +85,8 @@ Standing under a pylon, looking up, with the beacon flashing overhead:
 
 ![Under a pylon](docs/07-walk-under-pylon.jpg)
 
+The camera has a touch of cinematic lag: look direction and position are pulled toward your input by a **critically damped spring** (damping ratio 1: the fastest settle with no overshoot, so it feels weighty but never wobbles). It settles in about 0.2 s and is frame-rate independent.
+
 The grass follows you (a meadow that tiles around the player and a ring of horizon stubs that travels with you), so the field never runs out. Beacon glows stay a fixed size from far away, to match the photograph, and grow physically as you get close.
 
 ---
