@@ -5,4 +5,4 @@ set -euo pipefail
 cd "$(dirname "$0")"
 rm -rf public && mkdir public
 cp ../index.html public/
-npx --yes wrangler@latest deploy "$@"
+npx --yes wrangler@4.148.0 deploy "$@"           # pinned: bump deliberately, not on every deploy

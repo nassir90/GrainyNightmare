@@ -8,21 +8,19 @@
   :root { --night:#0e0e10; --ink:#fff; --ink-faint:rgba(255,255,255,.35);
           --font-label:"Times New Roman", Times, "Liberation Serif", serif; color-scheme:dark; }
   html,body { margin:0; height:100%; background:var(--night); color:var(--ink); overflow:hidden; font-family:var(--font-label); }
-  canvas#c { position:fixed; inset:0; width:100%; height:100%; display:block; }
+  canvas#c { position:fixed; inset:0; width:100%; height:100%; display:block; -webkit-user-select:none; user-select:none; }
   /* a column of line controls in the lower right, no panel */
-  .controls { position:fixed; right:20px; bottom:calc(18px + env(safe-area-inset-bottom, 0px));
-    display:grid; grid-template-columns:auto clamp(110px,18vw,170px); column-gap:14px; row-gap:4px; align-items:center;
-    font-size:15px; text-transform:uppercase; letter-spacing:.04em; text-shadow:0 0 6px rgba(0,0,0,.55); }
-  .controls.hidden-ui { display:none; }
+  .controls, .scenes { position:fixed; bottom:calc(18px + env(safe-area-inset-bottom, 0px)); padding-bottom:env(safe-area-inset-bottom, 0px);
+    font-size:15px; text-transform:uppercase; letter-spacing:.04em; text-shadow:0 0 6px rgba(0,0,0,.55); transition:opacity .7s; }
+  .controls.hidden-ui, .scenes.hidden-ui { display:none; }
+  .controls { right:20px; display:grid; grid-template-columns:auto clamp(110px,18vw,170px); column-gap:14px; row-gap:4px; align-items:center; }
   .controls label { justify-self:end; cursor:pointer; white-space:nowrap; }
   .squeeze { display:inline-block; transform:scaleX(.72); transform-origin:right center; }   /* compressed capitals */
   .line { position:relative; height:22px; }
   .line canvas { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
   .line input { position:absolute; inset:0; width:100%; height:100%; margin:0; opacity:0; cursor:ew-resize; }
   .line:focus-within { outline:1px solid var(--ink-faint); outline-offset:2px; }
-  .scenes { position:fixed; left:20px; bottom:calc(18px + env(safe-area-inset-bottom, 0px)); display:flex; flex-direction:column; gap:2px;
-    font-size:15px; text-transform:uppercase; letter-spacing:.04em; text-shadow:0 0 6px rgba(0,0,0,.55); }
-  .scenes.hidden-ui { display:none; }
+  .scenes { left:20px; display:flex; flex-direction:column; gap:2px; }
   .scenes button { font:inherit; letter-spacing:inherit; text-transform:inherit; text-shadow:inherit; color:var(--ink); background:none; border:0;
     padding:2px 0; text-align:left; cursor:pointer; opacity:.4; transition:opacity .4s; }
   .scenes button[aria-current="true"] { opacity:1; }
@@ -31,7 +29,6 @@
   .scenes .walk { margin-top:8px; }
   .scenes .walk[aria-pressed="true"] { opacity:1; }
   body.walking canvas#c { cursor:grab; } body.walking.dragging canvas#c { cursor:grabbing; }
-  canvas#c { -webkit-user-select:none; user-select:none; }
   body.walking canvas#c { touch-action:none; }          /* touch gestures are only ours while walking (joystick + look-drag); otherwise the browser keeps pull-to-refresh etc. */
   /* touch layout: nothing but the world while walking; a floating joystick bottom-left, drag anywhere else to look */
   body.touch.walking .scenes, body.touch.walking .controls { opacity:0; pointer-events:none; }
@@ -43,22 +40,13 @@
   .topbtn { position:fixed; right:calc(16px + env(safe-area-inset-right, 0px)); top:calc(14px + env(safe-area-inset-top, 0px)); font:inherit; font-size:14px; letter-spacing:.06em; text-transform:uppercase;
     color:#fff; background:rgba(14,14,16,.45); border:1px solid rgba(255,255,255,.35); border-radius:2px; padding:6px 10px; cursor:pointer; display:none; text-shadow:0 0 6px rgba(0,0,0,.6); }
   body.touch.walking #exitbtn { display:block; }
-  .controls, .scenes { padding-bottom:env(safe-area-inset-bottom, 0px); transition:opacity .7s; }
   /* the HUD wakes on input and fades when idle; while faded it ignores touches, so the first tap just wakes it */
   body.hud-idle .controls, body.hud-idle .scenes { opacity:0; pointer-events:none; }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
-<div class="controls" id="controls">
-  <label for="speed"><span class="squeeze" id="o_speed" data-name="Wind">Wind</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="speed" type="range" min="0" max="25" step="0.1" value="8"></div>
-  <label for="dir"><span class="squeeze" id="o_dir" data-name="From">From</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="dir" type="range" min="0" max="360" step="1" value="150"></div>
-  <label for="gust"><span class="squeeze" id="o_gust" data-name="Gusts">Gusts</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="gust" type="range" min="0" max="1" step="0.01" value="0.35"></div>
-  <label for="sway"><span class="squeeze" id="o_sway" data-name="Grass">Grass</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="sway" type="range" min="0" max="2" step="0.01" value="1"></div>
-  <label for="sky"><span class="squeeze" id="o_sky" data-name="Sky">Sky</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="sky" type="range" min="0" max="4" step="0.05" value="1"></div>
-  <label for="int"><span class="squeeze" id="o_int" data-name="Blink">Blink</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="int" type="range" min="2" max="120" step="1" value="28"></div>
-  <label for="bloom"><span class="squeeze" id="o_bloom" data-name="Bloom">Bloom</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="bloom" type="range" min="0" max="2" step="0.01" value="1"></div>
-  <label for="grain"><span class="squeeze" id="o_grain" data-name="Grain">Grain</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="grain" type="range" min="0" max="2" step="0.01" value="1"></div>
+<div class="controls" id="controls"></div>             <!-- rows are built from CONTROLS in the script -->
 </div>
 
 <div class="joy idle" id="joy"><div class="base" id="joybase"></div><div class="knob" id="joyknob"></div></div>
@@ -78,6 +66,7 @@
 <script type="module">
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+const { clamp, degToRad, damp } = THREE.MathUtils;
 
 // Linear-light pipeline. Sampled sRGB values are converted to linear on the way in
 // (rgb() below, and in the shaders), lighting and bloom happen in linear, and the final pass encodes back to sRGB.
@@ -88,13 +77,15 @@ THREE.ColorManagement.enabled = true;
  * ------------------------------------------------------------------ */
 const REF_H = 605, REF_W = 1080, HORIZON_Y = 460;
 const FOV = 30;
-const F_REF = (REF_H / 2) / Math.tan(THREE.MathUtils.degToRad(FOV / 2)); // focal length in ref pixels
+const TAN_HALF = Math.tan(degToRad(FOV / 2)), F_REF = (REF_H / 2) / TAN_HALF;   // F_REF: focal length in reference pixels
 
 // The sky itself is a set of drifting globs (see "Sky" below). Its t = 0 state was fitted, by tools/fit_sky.py, to the gradient measured
 // from the reference photograph: row-by-row means of the brighter 40% of pixels (silhouettes excluded), plus a left-to-right tint.
 
-const GROUND = [14,14,16], TOWER = [16,14,25], HAZE = [24,22,36];
 const rgb = a => new THREE.Color().setRGB(a[0]/255, a[1]/255, a[2]/255, THREE.SRGBColorSpace);   // sRGB bytes → linear Color
+const GROUND = rgb([14, 14, 16]);
+// Exponential smoothing toward a target with time constant τ (a first-order low-pass filter; frame-rate independent)
+const smooth = (x, target, tau, dt) => damp(x, target, 1 / tau, dt);
 
 // Turbines picked off the reference: [screen x px, hub y px]
 const TURBINES = [
@@ -105,14 +96,11 @@ const HUB_H = 80, CAM_H = 1.7, ROTOR_R = 30;
 const GRAIN_DIST = 1200;                                            // metres at which grain reaches full strength (sky counts as ≥ this)
 const TOP_MARGIN = 45;                                              // ref px of sky kept above the highest blade tip
 
-// Gentle, never-quite-flat terrain. Same function lives in JS (placement) and GLSL (ground + grass).
-const terrain = (x, z) => 0.9 * Math.sin(x * 0.011 + 0.7) * Math.cos(z * 0.014 + 1.9)
-                        + 0.45 * Math.sin(x * 0.027 - z * 0.021 + 2.2) + 0.25 * Math.sin(x * 0.06 + z * 0.05);
-const TERRAIN_GLSL = `
-  float terrain(vec2 p){
-    return 0.9 * sin(p.x * 0.011 + 0.7) * cos(p.y * 0.014 + 1.9)
-         + 0.45 * sin(p.x * 0.027 - p.y * 0.021 + 2.2) + 0.25 * sin(p.x * 0.06 + p.y * 0.05);
-  }`;
+// Gentle, never-quite-flat terrain: a sum of waves a·sin(kx·x + kz·z + p). The JS version (placement, collisions, eye height) and the
+// GLSL version (ground, grass) are both generated from this one table, so they cannot drift apart.
+const TERRAIN = [[0.45, 0.011, 0.014, 2.6], [0.45, 0.011, -0.014, -1.2], [0.45, 0.027, -0.021, 2.2], [0.25, 0.06, 0.05, 0]];
+const terrain = (x, z) => TERRAIN.reduce((h, [a, kx, kz, p]) => h + a * Math.sin(kx * x + kz * z + p), 0);
+const TERRAIN_GLSL = `float terrain(vec2 q){ return ${TERRAIN.map(([a, kx, kz, p]) => `${a.toFixed(4)} * sin(${kx.toFixed(4)} * q.x + ${kz.toFixed(4)} * q.y + ${p.toFixed(4)})`).join(' + ')}; }`;
 const CAM_Y = CAM_H + terrain(0, 0);
 
 /* ------------------------------------------------------------------ *
@@ -124,7 +112,7 @@ document.body.classList.toggle('touch', IS_TOUCH);
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
 renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
 renderer.toneMapping = THREE.NoToneMapping;
-renderer.setClearColor(rgb(GROUND), 0);
+renderer.setClearColor(GROUND, 0);
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(rgb([17, 15, 26]), 300, 5000);   // haze for 3D objects matches their unlit colour: distance never brightens them
@@ -137,47 +125,54 @@ const rt = new THREE.WebGLRenderTarget(4, 4, { samples: 4, ...HF });
 /* ------------------------------------------------------------------ *
  *  State / controls
  * ------------------------------------------------------------------ */
-const S = { speed: 8, dir: 150, gust: 0.35, sway: 1, interval: 2, grain: 1, bloom: 1, flashDur: 0.42 };
-const bind = (id, key, fmt) => {
-  const el = document.getElementById(id), out = document.getElementById('o_' + id);
+const S = { flashDur: 0.42 };                                       // slider values land here (raw); V holds their smoothed copies
+const compass = d => ['N','NE','E','SE','S','SW','W','NW'][Math.round(d / 45) % 8];
+// [key, label, min, max, step, default, readout]: builds each slider row and binds it to S[key]
+const CONTROLS = [
+  ['speed',    'Wind',  0, 25,  0.1,  8,    v => v.toFixed(1) + ' m/s'],
+  ['dir',      'From',  0, 360, 1,    150,  v => v + '° ' + compass(v)],
+  ['gust',     'Gusts', 0, 1,   0.01, 0.35, v => v.toFixed(2)],
+  ['sway',     'Grass', 0, 2,   0.01, 1,    v => v.toFixed(2) + '×'],
+  ['sky',      'Sky',   0, 4,   0.05, 1,    v => v === 0 ? 'frozen' : v.toFixed(2) + '×'],
+  ['interval', 'Blink', 2, 120, 1,    28,   v => v.toFixed(0) + ' s each'],
+  ['bloom',    'Bloom', 0, 2,   0.01, 1,    v => v.toFixed(2) + '×'],
+  ['grain',    'Grain', 0, 2,   0.01, 1,    v => v.toFixed(2) + '×'],
+];
+const controlsEl = document.getElementById('controls');
+for (const [key, name, min, max, step, value, fmt] of CONTROLS) {
+  controlsEl.insertAdjacentHTML('beforeend', `<label for="${key}"><span class="squeeze" id="o_${key}" data-name="${name}">${name}</span></label>` +
+    `<div class="line"><canvas aria-hidden="true"></canvas><input id="${key}" type="range" min="${min}" max="${max}" step="${step}" value="${value}"></div>`);
+  const el = document.getElementById(key), out = document.getElementById('o_' + key);
   let timer;
-  const upd = () => {
+  el.addEventListener('input', () => {
     S[key] = parseFloat(el.value);
     out.textContent = fmt(S[key]);                                   // show the value while adjusting, then the name again
-    clearTimeout(timer); timer = setTimeout(() => { out.textContent = out.dataset.name; }, 900);
-  };
-  el.addEventListener('input', upd); S[key] = parseFloat(el.value);
-};
-// Smoothed copies of the controls. Each moves toward its slider with exponential smoothing
-// (a first-order low-pass filter): v += (target - v) * (1 - e^(-dt/τ)). Frame-rate independent.
+    clearTimeout(timer); timer = setTimeout(() => { out.textContent = name; }, 900);
+  });
+  el.addEventListener('pointerup', () => el.blur());               // so the arrow keys go back to changing scenes
+  S[key] = value;
+}
+// Smoothed copies of the controls, so cranking a slider eases in instead of snapping
 const V = {};
 const TAU = { sky: 0.8, speed: 1.4, dir: 1.0, gust: 0.7, sway: 0.6, grain: 0.35, bloom: 0.35 };   // time constants, seconds
 const smoothControls = dt => {
   for (const k in TAU) {
-    const a = 1 - Math.exp(-dt / TAU[k]);
     if (V[k] === undefined) V[k] = S[k];
-    V[k] += (k === 'dir' ? ((S[k] - V[k] + 540) % 360 - 180) : (S[k] - V[k])) * a;   // direction takes the short way round
+    V[k] = k === 'dir' ? (V.dir + smooth(0, (S.dir - V.dir + 540) % 360 - 180, TAU.dir, dt) + 360) % 360   // direction takes the short way round
+                       : smooth(V[k], S[k], TAU[k], dt);
   }
-  V.dir = (V.dir + 360) % 360;
 };
-const compass = d => ['N','NE','E','SE','S','SW','W','NW'][Math.round(d / 45) % 8];
-bind('speed','speed', v => v.toFixed(1) + ' m/s');
-bind('dir','dir', v => v + '° ' + compass(v));
-bind('gust','gust', v => v.toFixed(2));
-bind('sway','sway', v => v.toFixed(2) + '×');
-bind('sky','sky', v => v === 0 ? 'frozen' : v.toFixed(2) + '×');
-bind('int','interval', v => v.toFixed(0) + ' s each');
-bind('bloom','bloom', v => v.toFixed(2) + '×');
-bind('grain','grain', v => v.toFixed(2) + '×');
+const HUD = [controlsEl, document.getElementById('scenes')];
+let hudShown = true;                                                // false while faded, pinned hidden or (on touch) walking: the sliders aren't redrawn then
 /* HUD: wakes on any input and fades after a few idle seconds (the video-player pattern). Hovering it or dragging a slider keeps it awake.
    On touch a tap on the scene wakes it; on desktop moving the mouse does. Walking: only a mouse hover wakes it, so look-drags and WASD don't. H pins it hidden. */
 {
-  const hud = [document.getElementById('controls'), document.getElementById('scenes')], IDLE_MS = IS_TOUCH ? 5000 : 3500;
+  const IDLE_MS = IS_TOUCH ? 5000 : 3500;
   let timer = 0, hot = 0, busy = false;
   const sleep = () => { if (!hot && !busy) document.body.classList.add('hud-idle'); };
   const wake = () => { document.body.classList.remove('hud-idle'); clearTimeout(timer); timer = setTimeout(sleep, IDLE_MS); };
   const walking = () => typeof walk !== 'undefined' && walk.on;
-  hud.forEach(e => {
+  HUD.forEach(e => {
     e.addEventListener('pointerenter', () => { hot++; wake(); });
     e.addEventListener('pointerleave', () => { hot = Math.max(0, hot - 1); wake(); });
     e.addEventListener('pointerdown', () => { busy = true; wake(); });
@@ -190,7 +185,7 @@ bind('grain','grain', v => v.toFixed(2) + '×');
   addEventListener('hudwake', wake);
   wake();
 }
-addEventListener('keydown', e => { if (e.key === 'h' || e.key === 'H') [document.getElementById('controls'), document.getElementById('scenes')].forEach(e => e.classList.toggle('hidden-ui')); });
+addEventListener('keydown', e => { if (e.key === 'h' || e.key === 'H') HUD.forEach(el => el.classList.toggle('hidden-ui')); });
 
 /* ------------------------------------------------------------------ *
  *  Sky: soft globs drifting over a base colour, above a thin band of horizon haze. The globs wander, breathe and shift colour,
@@ -224,16 +219,15 @@ const skyU = {
   uBlobCol: { value: Array.from({ length: SKY_N }, () => new THREE.Vector3()) },          // signed offset, 0..1 units
   uBlobK: { value: new Array(SKY_N).fill(1) },                                              // 1/σ²
 };
-const clampN = THREE.MathUtils.clamp;
 function applySky(t) {
   const b0 = SKY_INIT.base;
   skyU.uBase.value.set((b0[0] + osc([5, 0.011, 1.3], t)) / 255, (b0[1] + osc([4, 0.013, 2.1], t)) / 255, (b0[2] + osc([5, 0.009, 4.0], t)) / 255);
   SKY_INIT.haze.forEach((hz, k) => { const m = 1 + osc(HAZE_MOTION[k], t); skyU.uHaze.value[k].set(hz.color[0] * m / 255, hz.color[1] * m / 255, hz.color[2] * m / 255, hz.eps); });
   SKY_INIT.blobs.forEach((g, i) => {
     const m = SKY_MOTION[i];
-    const az = g.az + m.w * t + osc(m.az, t), el = clampN(g.el + osc(m.el, t), 0, 1.45);
+    const az = g.az + m.w * t + osc(m.az, t), el = clamp(g.el + osc(m.el, t), 0, 1.45);
     skyU.uBlobPos.value[i].set(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el));
-    const sigma = g.sigma * (1 + osc(m.size, t)), strength = clampN(1 + osc(m.str, t), 0.2, 1.8);
+    const sigma = g.sigma * (1 + osc(m.size, t)), strength = clamp(1 + osc(m.str, t), 0.2, 1.8);
     skyU.uBlobK.value[i] = 1 / (sigma * sigma);
     skyU.uBlobCol.value[i].set(...g.color.map((c, k) => (c + Math.sign(c || 1) * osc(m.hue[k], t)) * strength / 255));
   });
@@ -246,13 +240,12 @@ const sky = new THREE.Mesh(
   new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
     defines: { SKY_N, HAZE_N },
-    uniforms: Object.assign({ uF: { value: F_REF }, uGround: { value: rgb(GROUND) } }, skyU),
+    uniforms: Object.assign({ uF: { value: F_REF }, uGround: { value: GROUND } }, skyU),
     vertexShader: `varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
     fragmentShader: `
       uniform float uF; uniform vec3 uGround, uBase; uniform vec4 uHaze[HAZE_N];
       uniform vec3 uBlobPos[SKY_N], uBlobCol[SKY_N]; uniform float uBlobK[SKY_N];
-      varying vec3 vDir;
-      vec3 srgb2lin(vec3 c){ return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c)); }
+      varying vec3 vDir;                                            // (three's sRGBTransferEOTF/OETF are prepended to every ShaderMaterial)
       void main(){
         vec3 d = normalize(vDir);
         float h = uF * d.y / max(length(d.xz), 1e-4);                 // below the horizon is ground
@@ -260,7 +253,7 @@ const sky = new THREE.Mesh(
         vec3 col = uBase;
         for (int k = 0; k < HAZE_N; k++) col += uHaze[k].rgb * exp(-d.y / uHaze[k].w);
         for (int i = 0; i < SKY_N; i++) col += uBlobCol[i] * exp((dot(d, uBlobPos[i]) - 1.0) * uBlobK[i]);
-        gl_FragColor = vec4(srgb2lin(clamp(col, 0.0, 1.0)), 1.0);
+        gl_FragColor = sRGBTransferEOTF(vec4(clamp(col, 0.0, 1.0), 1.0));    // the globs live in sRGB; the scene renders in linear light
       }`,
   })
 );
@@ -273,7 +266,7 @@ scene.add(sky);
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(9000, 9000, 600, 600).rotateX(-Math.PI / 2),
   new THREE.ShaderMaterial({
-    uniforms: { uBase: { value: rgb(GROUND) } },
+    uniforms: { uBase: { value: GROUND } },
     vertexShader: `${TERRAIN_GLSL} varying vec2 vP; varying float vDist;
       void main(){ vec3 p = position; p.y = terrain(p.xz); vP = p.xz; vec4 mv = modelViewMatrix * vec4(p, 1.0); vDist = length(mv.xyz); gl_Position = projectionMatrix * mv; }`,
     fragmentShader: `uniform vec3 uBase; varying vec2 vP; varying float vDist;
@@ -291,10 +284,11 @@ scene.add(ground);
 /* ------------------------------------------------------------------ *
  *  Grass: near blades + far stubs that ragged the horizon
  * ------------------------------------------------------------------ */
+const WIND = new THREE.Vector2(1, 0);                                // direction the air moves (shared by the grass and the wires)
 const grassU = {
-  uPhase: { value: 0 }, uWind: { value: new THREE.Vector2(1, 0) }, uSpeed: { value: 8 },
+  uPhase: { value: 0 }, uWind: { value: WIND }, uSpeed: { value: 8 },
   uSway: { value: 1 }, uGust: { value: 0.35 }, uTime: { value: 0 },
-  uBase: { value: rgb(GROUND) }, uTip: { value: rgb([22, 20, 30]) },
+  uBase: { value: GROUND }, uTip: { value: rgb([22, 20, 30]) },
   uOrigin: { value: new THREE.Vector2(0, 0) },                      // where the player stands (walk mode)
 };
 const grassVS = `
@@ -348,7 +342,10 @@ function makeGrass(N, fill, { wrap = 0, glue = 0, origin = false } = {}) {
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setIndex(idx);
   const data = new Float32Array(N * 4), rnd = new Float32Array(N * 2), wid = new Float32Array(N);
-  for (let i = 0; i < N; i++) { fill(i, data, rnd, wid); }
+  for (let i = 0; i < N; i++) {                                       // fill() places one blade: [x, z, height, width]
+    const [x, z, H, Wd] = fill();
+    data.set([x, z, Math.random() * Math.PI, H], i * 4); rnd.set([Math.random() * 6.283, Math.random()], i * 2); wid[i] = Wd;
+  }
   g.setAttribute('aData', new THREE.InstancedBufferAttribute(data, 4));
   g.setAttribute('aRand', new THREE.InstancedBufferAttribute(rnd, 2));
   g.setAttribute('aW', new THREE.InstancedBufferAttribute(wid, 1));
@@ -359,25 +356,16 @@ function makeGrass(N, fill, { wrap = 0, glue = 0, origin = false } = {}) {
   }));
   mesh.frustumCulled = false; scene.add(mesh); return mesh;
 }
+// Horizon stubs are sized in screen pixels (2–34 ref px tall, mostly low; 2–7 wide) at their distance, so the horizon is a ragged edge
+const stubDist = () => 110 + Math.pow(Math.random(), 1.3) * 520;
+const stub = (x, z, d) => [x, z, (2 + Math.pow(Math.random(), 1.9) * 32) * d / F_REF, (2 + Math.random() * 5) * d / F_REF];
+const blade = (x, z) => [x, z, 0.45 + Math.random() * 0.7, 0.05];
 // Default composition: blades packed in front of the fixed camera, plus a ragged horizon of stubs
-const grassNear = makeGrass(140000, (i, data, rnd, wid) => {
-  const z = 4 - Math.pow(Math.random(), 1.9) * 85, x = (Math.random() - 0.5) * 2 * (6 + Math.abs(z) * 1.4);
-  data.set([x, z, Math.random() * Math.PI, 0.45 + Math.random() * 0.7], i * 4); rnd.set([Math.random() * 6.283, Math.random()], i * 2); wid[i] = 0.05;
-});
-const grassFar = makeGrass(110000, (i, data, rnd, wid) => {          // stubs sized in screen pixels (2–34 ref px tall, mostly low)
-  const d = 110 + Math.pow(Math.random(), 1.3) * 520, x = (Math.random() - 0.5) * 2 * d * 1.7;
-  const hpx = 2 + Math.pow(Math.random(), 1.9) * 32, wpx = 2 + Math.random() * 5;
-  data.set([x, -d, Math.random() * Math.PI, hpx * d / F_REF], i * 4); rnd.set([Math.random() * 6.283, Math.random()], i * 2); wid[i] = wpx * d / F_REF;
-});
+const grassNear = makeGrass(140000, () => { const z = 4 - Math.pow(Math.random(), 1.9) * 85; return blade((Math.random() - 0.5) * 2 * (6 + Math.abs(z) * 1.4), z); });
+const grassFar = makeGrass(110000, () => { const d = stubDist(); return stub((Math.random() - 0.5) * 2 * d * 1.7, -d, d); });
 // Walk mode: a meadow that tiles around the player, and a full ring of horizon stubs that travels with them
-const walkNear = makeGrass(170000, (i, data, rnd, wid) => {
-  data.set([(Math.random() - 0.5) * 160, (Math.random() - 0.5) * 160, Math.random() * Math.PI, 0.45 + Math.random() * 0.7], i * 4); rnd.set([Math.random() * 6.283, Math.random()], i * 2); wid[i] = 0.05;
-}, { wrap: 80, origin: true });
-const walkFar = makeGrass(170000, (i, data, rnd, wid) => {
-  const d = 110 + Math.pow(Math.random(), 1.3) * 520, a = Math.random() * Math.PI * 2;
-  const hpx = 2 + Math.pow(Math.random(), 1.9) * 32, wpx = 2 + Math.random() * 5;
-  data.set([Math.cos(a) * d, Math.sin(a) * d, Math.random() * Math.PI, hpx * d / F_REF], i * 4); rnd.set([Math.random() * 6.283, Math.random()], i * 2); wid[i] = wpx * d / F_REF;
-}, { glue: 1, origin: true });
+const walkNear = makeGrass(170000, () => blade((Math.random() - 0.5) * 160, (Math.random() - 0.5) * 160), { wrap: 80, origin: true });
+const walkFar = makeGrass(170000, () => { const d = stubDist(), a = Math.random() * Math.PI * 2; return stub(Math.cos(a) * d, Math.sin(a) * d, d); }, { glue: 1, origin: true });
 walkNear.visible = walkFar.visible = false;
 
 /* ------------------------------------------------------------------ *
@@ -446,7 +434,7 @@ const bladeGeo = (() => {
   const N = 30, P = 36, pos = [], idx = [];
   for (let i = 0; i <= N; i++) {
     const r = 0.9 + (ROTOR_R - 0.9) * Math.pow(i / N, 1.15), c = interp(chordT, r), t = interp(thickT, r);
-    const tw = THREE.MathUtils.degToRad(16 * Math.pow(1 - r / ROTOR_R, 1.6) - 1.0 + 4);
+    const tw = degToRad(16 * Math.pow(1 - r / ROTOR_R, 1.6) - 1.0 + 4);
     for (let j = 0; j < P; j++) {
       const th = 2 * Math.PI * j / P, x = (1 + Math.cos(th)) / 2, sg = th < Math.PI ? 1 : -1;
       const yt = 5 * t * (0.2969 * Math.sqrt(x) - 0.126 * x - 0.3516 * x * x + 0.2843 * x ** 3 - 0.1036 * x ** 4);
@@ -480,8 +468,6 @@ const haloTex = radialTex([[0,255,120,115,1],[2/16,251,113,109,1],[4/16,238,104,
 // tight hot core, drawn additively with HDR colour so the bloom pass has something to chew on
 const coreTex = radialTex([[0,255,255,255,1],[.25,255,255,255,.85],[.55,255,255,255,.28],[1,255,255,255,0]]);
 
-const f = F_REF, TAN_HALF = Math.tan(THREE.MathUtils.degToRad(FOV / 2));
-const spriteScale = refPx => (refPx / REF_H) * 2 * TAN_HALF;        // screen-height fraction → sprite scale
 const turbines = [], farmColliders = [];
 const farm = new THREE.Group(); scene.add(farm);
 
@@ -489,14 +475,14 @@ const farm = new THREE.Group(); scene.add(farm);
 const beacons = [];
 const housingGeo = new THREE.SphereGeometry(0.35, 12, 8);
 function makeBeacon(parent, p, key) {
-  const mk = (map, px, blending) => {
+  const mk = (map, blending) => {                                     // sized every frame in update()
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map, transparent: true, depthWrite: false, sizeAttenuation: false, fog: false, blending }));
-    sp.scale.setScalar(spriteScale(px)); sp.position.copy(p); sp.visible = false; parent.add(sp); return sp;
+    sp.position.copy(p); sp.visible = false; parent.add(sp); return sp;
   };
   const housing = new THREE.Mesh(housingGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.1, 0.008, 0.008) }));
   housing.position.copy(p); parent.add(housing);
   const obj = new THREE.Object3D(); obj.position.copy(p); parent.add(obj);
-  const b = { key, obj, housing, halo: mk(haloTex, 22, THREE.NormalBlending), core: mk(coreTex, 9, THREE.AdditiveBlending), off: Math.random(), dist: 0 };
+  const b = { key, obj, housing, halo: mk(haloTex, THREE.NormalBlending), core: mk(coreTex, THREE.AdditiveBlending), off: Math.random(), dist: 0 };
   beacons.push(b); return b;
 }
 // A fixed pool of point lights (a constant light count avoids shader recompiles); each frame they are handed to the nearest active beacons.
@@ -505,9 +491,9 @@ const lightPool = Array.from({ length: POOL }, () => { const l = new THREE.Point
 
 function addTurbine(px, hubY) {
   // Keep the highest blade tip a margin below the top of the frame: push a turbine back if its rotor would poke out
-  const dMin = (HUB_H - CAM_H + ROTOR_R * 1.16 + 1) * f / (HORIZON_Y - TOP_MARGIN);
-  const d = Math.max((HUB_H - CAM_H) * f / (HORIZON_Y - hubY), dMin);
-  const x = (px - REF_W / 2) / f * d;
+  const dMin = (HUB_H - CAM_H + ROTOR_R * 1.16 + 1) * F_REF / (HORIZON_Y - TOP_MARGIN);
+  const d = Math.max((HUB_H - CAM_H) * F_REF / (HORIZON_Y - hubY), dMin);
+  const x = (px - REF_W / 2) / F_REF * d;
   const yaw = new THREE.Group();
   yaw.position.set(x, terrain(x, -d) - 1.5, -d);
   yaw.add(new THREE.Mesh(towerGeo, turbPaint), new THREE.Mesh(nacelleGeo, turbPaint), new THREE.Mesh(mastGeo, turbDark));
@@ -541,7 +527,7 @@ for (let i = 0; i < 26; i++) {
  *  sagging conductors, marker balls on the earth wire, red aviation beacons
  * ------------------------------------------------------------------ */
 const pylonGroup = new THREE.Group(); pylonGroup.visible = false; scene.add(pylonGroup);
-const latticeU = { uWind: { value: new THREE.Vector2(1, 0) }, uSpeed: { value: 8 }, uT: { value: 0 }, uMinPx: { value: 0.75 }, uF: { value: F_REF } };
+const latticeU = { uWind: { value: WIND }, uSpeed: { value: 8 }, uT: { value: 0 }, uMinPx: { value: 0.75 }, uF: { value: F_REF } };
 // Thin members vanish at distance, so every beam is widened in the vertex shader to at least ~1 reference pixel.
 // Wires (aSw.w > 0) also blow out downwind and flutter, most at mid-span.
 const widen = sh => {
@@ -642,8 +628,7 @@ function makePylonGeo(bars, k) {
   corners.forEach(([sx, sz]) => addBeam(B, V3(sx * W(52), 52, sz * W(52)), V3(0, 55.2, 0), 0.08 * k));   // leg tops converge on the peak
   return beamGeo(B);
 }
-let pylonGeo = makePylonGeo(PYLON_CFG.bars, PYLON_CFG.thickness);
-const pylonMeshes = [];
+const pylonGeo = makePylonGeo(PYLON_CFG.bars, PYLON_CFG.thickness);
 // Insulator string: a pin with a stack of ceramic discs and end fittings, hanging from the arm tip
 const insulatorGeo = (() => {
   const parts = [new THREE.CylinderGeometry(0.05, 0.05, 2.7, 8).translate(0, -1.35, 0), new THREE.CylinderGeometry(0.16, 0.16, 0.3, 10).translate(0, -2.6, 0)];
@@ -660,7 +645,7 @@ function addPylonLine(P, start, step, count, lit) {
     const x = start[0] + step[0] * i, z = start[1] + step[1] * i, g = new THREE.Group();
     g.position.set(x, terrain(x, z) - 0.6, z); g.rotation.y = yaw + (Math.random() - 0.5) * 0.03;
     g.scale.setScalar(1 + (Math.random() - 0.5) * 0.08);
-    const pm = new THREE.Mesh(pylonGeo, steelPaint); pylonMeshes.push(pm); g.add(pm);
+    g.add(new THREE.Mesh(pylonGeo, steelPaint));
     ARMS.forEach(([y, L]) => { for (const s of [-1, 1]) { const m = new THREE.Mesh(insulatorGeo, ceramic); m.position.set(s * L, y, 0); g.add(m); } });
     if (lit(i)) makeBeacon(g, new THREE.Vector3(0, PYLON_TOP, 0), P.key);
     P.group.add(g); g.updateMatrixWorld(true); towers.push(g); P.colliders.push({ x, z, r: 5.0 * g.scale.x });
@@ -691,10 +676,11 @@ const ballDummy = new THREE.Object3D();
 // Same wind response as the wire shader, so each ball rides its wire
 const updateBalls = (time, speed, wind) => {
   for (const P of pylonScenes) {
+    if (!P.group.visible) continue;                                  // only the scene on screen
     P.balls.forEach((b, i) => {
       const along = b.p.x * 0.013 + b.p.z * 0.017;
       const flut = 0.6 * Math.sin(time * 1.1 + along * 3) + 0.4 * Math.sin(time * 2.3 + along * 5 + 1.7);
-      const off = b.sw * ((wind.x * b.perp.x + wind.y * b.perp.z) * speed * 0.05 + flut * 0.35 * THREE.MathUtils.clamp(speed / 8, 0, 1.5));
+      const off = b.sw * ((wind.x * b.perp.x + wind.y * b.perp.z) * speed * 0.05 + flut * 0.35 * clamp(speed / 8, 0, 1.5));
       ballDummy.position.copy(b.p).addScaledVector(b.perp, off); ballDummy.updateMatrix(); P.ballMesh.setMatrixAt(i, ballDummy.matrix);
     });
     P.ballMesh.instanceMatrix.needsUpdate = true;
@@ -704,11 +690,11 @@ const updateBalls = (time, speed, wind) => {
 /* ------------------------------------------------------------------ *
  *  Scene switching: ← / → / Space, dip-to-black fade
  * ------------------------------------------------------------------ */
-const SCENES = [
-  { name: 'Windmills', show: on => { farm.visible = on; } },
-  { name: 'Pylons 1',   show: on => { pylonGroup.visible = on; } },
-  { name: 'Pylons 2', show: on => { pylonGroup2.visible = on; } },
-  { name: 'Blank',     show: () => {} },                              // just the dusk sky, ground and swaying grass
+const SCENES = [                                                    // key: which beacons belong to the scene; colliders: what you can't walk through
+  { name: 'Windmills', key: 'farm',   colliders: farmColliders,              show: on => { farm.visible = on; } },
+  { name: 'Pylons 1',  key: 'pylon',  colliders: pylonScenes[0].colliders,   show: on => { pylonGroup.visible = on; } },
+  { name: 'Pylons 2',  key: 'pylon2', colliders: pylonScenes[1].colliders,   show: on => { pylonGroup2.visible = on; } },
+  { name: 'Blank',     key: '',       colliders: [],                         show: () => {} },   // just the dusk sky, ground and swaying grass
 ];
 let sceneIdx = 0, pendingScene = -1, fade = 1;
 const sceneBtns = [...document.querySelectorAll('#scenes button[data-i]')];
@@ -724,7 +710,6 @@ addEventListener('keydown', e => {
   const base = pendingScene >= 0 ? pendingScene : sceneIdx;
   goScene(k === 'ArrowLeft' ? base - 1 : base + 1);
 }, true);
-document.querySelectorAll('.line input').forEach(el => el.addEventListener('pointerup', () => el.blur()));
 
 /* ------------------------------------------------------------------ *
  *  Walk mode (press E): first person. WASD to move, Shift to run, drag to look.
@@ -767,7 +752,7 @@ joyHome(); addEventListener('resize', () => { if (stick.id === null) joyHome(); 
       return;
     }
     const l = looks.get(e.pointerId); if (!l) return;
-    walk.yaw -= (e.clientX - l.x) * l.k; walk.pitch = THREE.MathUtils.clamp(walk.pitch - (e.clientY - l.y) * l.k, -1.35, 1.35);   // drag down = look down
+    walk.yaw -= (e.clientX - l.x) * l.k; walk.pitch = clamp(walk.pitch - (e.clientY - l.y) * l.k, -1.35, 1.35);   // drag down = look down
     l.x = e.clientX; l.y = e.clientY;
   });
   const end = e => {
@@ -778,18 +763,17 @@ joyHome(); addEventListener('resize', () => { if (stick.id === null) joyHome(); 
 document.getElementById('exitbtn').addEventListener('click', () => setWalk(false));
 
 const PORTRAIT_YAW = [0, 4, -4.5, 0];                                // degrees right (+) / left (−), indexed by scene
-const COLLIDERS = () => [farmColliders, pylonScenes[0].colliders, pylonScenes[1].colliders, []][sceneIdx] || [];
 // Cinematic lag: the camera does not follow input directly but is pulled toward it by a critically damped spring
 // (damping ratio 1: the fastest settle with no overshoot, so it feels weighty but never wobbles). Exact solution, so it is frame-rate independent.
 const OM_LOOK = 26, OM_MOVE = 18;                                    // spring stiffness in rad/s; higher = tighter. Settles in roughly 4/ω seconds.
-const damp = (x, v, target, omega, dt) => {
-  const e = Math.exp(-omega * dt), dx = x - target, t = (v + omega * dx) * dt;
-  return [target + (dx + t) * e, (v - omega * t) * e];
+const spring = (o, k, vel, vk, target, omega, dt) => {               // advances o[k] (with velocity vel[vk]) toward target, in place
+  const e = Math.exp(-omega * dt), dx = o[k] - target, t = (vel[vk] + omega * dx) * dt;
+  o[k] = target + (dx + t) * e; vel[vk] = (vel[vk] - omega * t) * e;
 };
 const cam = { yaw: 0, pitch: 0, vyaw: 0, vpitch: 0, pos: new THREE.Vector3(), vel: new THREE.Vector3(), ready: false };
 const camDefault = new THREE.Vector3(0, CAM_Y, 0), camDefaultTarget = new THREE.Vector3(0, CAM_Y, -200), eyeV = new THREE.Vector3(), lookDir = new THREE.Vector3(), lookV = new THREE.Vector3();
 function updateWalk(dt) {
-  walk.w += ((walk.on ? 1 : 0) - walk.w) * (1 - Math.exp(-dt / 0.45));
+  walk.w = smooth(walk.w, walk.on ? 1 : 0, 0.45, dt);
   const s = walk.w * walk.w * (3 - 2 * walk.w), pos = walk.pos;
   if (walk.on) {
     const ix = (keys.has('d') ? 1 : 0) - (keys.has('a') ? 1 : 0), iz = (keys.has('w') ? 1 : 0) - (keys.has('s') ? 1 : 0), len = Math.hypot(ix, iz);
@@ -799,43 +783,44 @@ function updateWalk(dt) {
       sx = stick.x / sm; sz = -stick.y / sm; slen = 1; want = sm < 0.7 ? 2.6 * sm / 0.7 : 2.6 + (sm - 0.7) / 0.3 * 4.4;
     }
     const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw), rx = Math.cos(cam.yaw), rz = -Math.sin(cam.yaw);   // yaw 0 = looking down -z, like the fixed camera
-    const a = 1 - Math.exp(-dt / 0.12);
-    walk.vel.x += ((slen ? (rx * sx + fx * sz) / slen : 0) * want - walk.vel.x) * a;
-    walk.vel.y += ((slen ? (rz * sx + fz * sz) / slen : 0) * want - walk.vel.y) * a;
+    walk.vel.x = smooth(walk.vel.x, (slen ? (rx * sx + fx * sz) / slen : 0) * want, 0.12, dt);
+    walk.vel.y = smooth(walk.vel.y, (slen ? (rz * sx + fz * sz) / slen : 0) * want, 0.12, dt);
     pos.x += walk.vel.x * dt; pos.z += walk.vel.y * dt;
     const rr = Math.hypot(pos.x, pos.z); if (rr > 1800) { pos.x *= 1800 / rr; pos.z *= 1800 / rr; }   // edge of the world
-    for (const c of COLLIDERS()) {                                    // can't walk through towers and pylons
+    for (const c of SCENES[sceneIdx].colliders) {                                    // can't walk through towers and pylons
       const dx = pos.x - c.x, dz = pos.z - c.z, d = Math.hypot(dx, dz), min = c.r + 0.35;
       if (d < min && d > 1e-4) { pos.x = c.x + dx / d * min; pos.z = c.z + dz / d * min; }
     }
     const sp = walk.vel.length();
     walk.phase += dt * sp * 2 * Math.PI / (1.6 + 0.25 * Math.max(0, sp - 2.6));                    // stride lengthens as you speed up
-    walk.amp += (Math.min(1.3, sp / 2.6) - walk.amp) * (1 - Math.exp(-dt / 0.15));
-  } else { walk.vel.multiplyScalar(0); walk.amp *= Math.exp(-dt / 0.15); }
+    walk.amp = smooth(walk.amp, Math.min(1.3, sp / 2.6), 0.15, dt);
+  } else { walk.vel.set(0, 0); walk.amp = smooth(walk.amp, 0, 0.15, dt); }
 
   // camera: eases between the fixed composition and the eye-level view
   const gy = terrain(pos.x, pos.z), bob = Math.sin(walk.phase * 2) * 0.035 * walk.amp, sway = Math.sin(walk.phase) * 0.02 * walk.amp;
   const tx = pos.x + Math.cos(walk.yaw) * sway, ty = gy + EYE + bob, tz = pos.z - Math.sin(walk.yaw) * sway;
   if (!cam.ready) { cam.yaw = walk.yaw; cam.pitch = walk.pitch; cam.pos.set(tx, ty, tz); cam.ready = true; }
-  [cam.yaw, cam.vyaw] = damp(cam.yaw, cam.vyaw, walk.yaw, OM_LOOK, dt);
-  [cam.pitch, cam.vpitch] = damp(cam.pitch, cam.vpitch, walk.pitch, OM_LOOK, dt);
-  for (const [k, target] of [['x', tx], ['y', ty], ['z', tz]]) { const [p, v] = damp(cam.pos[k], cam.vel[k], target, OM_MOVE, dt); cam.pos[k] = p; cam.vel[k] = v; }
+  spring(cam, 'yaw', cam, 'vyaw', walk.yaw, OM_LOOK, dt);
+  spring(cam, 'pitch', cam, 'vpitch', walk.pitch, OM_LOOK, dt);
+  spring(cam.pos, 'x', cam.vel, 'x', tx, OM_MOVE, dt); spring(cam.pos, 'y', cam.vel, 'y', ty, OM_MOVE, dt); spring(cam.pos, 'z', cam.vel, 'z', tz, OM_MOVE, dt);
   eyeV.copy(cam.pos);
   const cp = Math.cos(cam.pitch);
   lookDir.set(-Math.sin(cam.yaw) * cp, Math.sin(cam.pitch), -Math.cos(cam.yaw) * cp);
   camera.position.lerpVectors(camDefault, eyeV, s);
-  camDefaultTarget.x = 200 * Math.tan(THREE.MathUtils.degToRad(PORTRAIT_YAW[sceneIdx] * (1 - framing(viewDims.W / viewDims.H).t)));   // in portrait, turn toward each scene's key subject
+  camDefaultTarget.x = 200 * Math.tan(degToRad(PORTRAIT_YAW[sceneIdx] * (1 - framing(viewDims.W / viewDims.H).t)));   // in portrait, turn toward each scene's key subject
   camera.lookAt(lookV.lerpVectors(camDefaultTarget, lookV.copy(eyeV).addScaledVector(lookDir, 100), s));
   if (Math.abs(s - viewDims.s) > 1e-4) applyView(s);
   sky.position.copy(camera.position);                                // the sky dome travels with the camera
   grassU.uOrigin.value.set(pos.x, pos.z);
-  walkNear.visible = walkFar.visible = walk.w > 0.02;
-  grassNear.visible = grassFar.visible = walk.w < 0.9;
+  // one grass set at a time, swapped half-way through the transition: drawing both meant the walk-mode horizon ring (centred on where
+  // you stopped walking) showed up as giant spikes in the fixed view while the camera eased back
+  const walkGrass = walk.w > 0.5;
+  walkNear.visible = walkFar.visible = walkGrass; grassNear.visible = grassFar.visible = !walkGrass;
 }
 
 // Default blink interval: a 2 s base stretched by (lit windmills × 2), so the farm blinks lazily and out of step
 {
-  const lit = turbines.filter(T => T.lit).length, el = document.getElementById('int');
+  const lit = turbines.filter(T => T.lit).length, el = document.getElementById('interval');
   el.value = 2 * lit * 2; el.dispatchEvent(new Event('input'));
 }
 
@@ -868,7 +853,6 @@ const finalMat = mkMat(`
   float hash(vec2 p){ vec3 q = fract(vec3(p.xyx) * .1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
   float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
     return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y) - 0.5; }
-  vec3 lin2srgb(vec3 c){ return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
   void main(){
     float sc = min(uRes.y / 605.0, uRes.x / 1080.0 * 2.4);          // fragments per reference pixel; capped on narrow (portrait) screens so grain stays fine
     vec2 p = gl_FragCoord.xy / sc;                                  // work in reference-pixel units
@@ -886,7 +870,7 @@ const finalMat = mkMat(`
     // fine layer (~1.5px correlation) + coarse blotch layers, achromatic like the reference
     float g = vn(p / 1.9 + o) * 0.80 + vn(p / 3.4 + o * 1.7 + 11.0) * 0.38 + vn(p / 9.0 + o * 0.6 + 40.0) * 0.18;
     // clamp to the displayable range *before* fading: HDR lights (values ≫ 1) would otherwise stay clipped-white until the fade is nearly black
-    vec3 disp = lin2srgb(clamp(c, 0.0, 1.0));                         // linear light → display, then grain in display units
+    vec3 disp = sRGBTransferOETF(vec4(clamp(c, 0.0, 1.0), 1.0)).rgb;                         // linear light → display, then grain in display units
     gl_FragColor = vec4(clamp(disp + g * uAmt * k, 0.0, 1.0) * uFade, 1.0);                    // whole frame is grained, strength ∝ distance
   }`,
   { tScene: { value: rt.texture }, tB0: { value: null }, tB1: { value: null }, tB2: { value: null }, tB3: { value: null },
@@ -901,9 +885,9 @@ const viewDims = { W: 1, H: 1, s: 0 };
 // The fixed composition was framed for a 1080×605 photograph. On narrower screens (a 9:16 phone) that keeps only a sliver, so the view
 // widens to hold a minimum horizontal field of view, and the horizon lifts so the machinery sits mid-screen instead of low in a sea of sky.
 function framing(aspect) {
-  const aRef = REF_W / REF_H, t = THREE.MathUtils.clamp((aspect - 0.5625) / (aRef - 0.5625), 0, 1);   // t: 0 = phone portrait … 1 = the reference frame
+  const aRef = REF_W / REF_H, t = clamp((aspect - 0.5625) / (aRef - 0.5625), 0, 1);   // t: 0 = phone portrait … 1 = the reference frame
   const hfov = 36 + (51.2 - 36) * t;                                                                  // degrees of horizontal view we insist on keeping
-  const vfov = aspect >= aRef ? FOV : Math.max(FOV, 2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(hfov / 2)) / aspect) * 180 / Math.PI);
+  const vfov = aspect >= aRef ? FOV : Math.max(FOV, 2 * Math.atan(Math.tan(degToRad(hfov / 2)) / aspect) * 180 / Math.PI);
   return { t, vfov, horizon: 0.58 + (HORIZON_Y / REF_H - 0.58) * t, walkFov: 58 + 14 * (1 - t) };
 }
 // s = 0: the fixed composition (horizon at its reference height); s = 1: wide first-person camera
@@ -919,7 +903,7 @@ function resize() {
   renderer.setPixelRatio(dpr); renderer.setSize(w, h, false);
   const W = Math.floor(w * dpr), H = Math.floor(h * dpr);
   rt.setSize(W, H);
-  mips.forEach((m, i) => { const s = 2 ** (i + 1); m.a.setSize(Math.max(2, W / s | 0), Math.max(2, H / s | 0)); m.b.setSize(Math.max(2, W / s | 0), Math.max(2, H / s | 0)); });
+  mips.forEach((m, i) => { const w2 = Math.max(2, W >> (i + 1)), h2 = Math.max(2, H >> (i + 1)); m.a.setSize(w2, h2); m.b.setSize(w2, h2); });
   camera.aspect = w / h;
   // shift the principal point so the horizon sits at its reference height (460/605 down the frame)
   viewDims.W = W; viewDims.H = H; applyView(viewDims.s);
@@ -930,7 +914,7 @@ addEventListener('resize', resize); resize();
 /* ------------------------------------------------------------------ *
  *  Loop
  * ------------------------------------------------------------------ */
-const lineSliders = [...document.querySelectorAll('.line')].map((el, i) => ({ input: el.querySelector('input'), canvas: el.querySelector('canvas'), seed: i * 7.31 }));
+const lineSliders = [...document.querySelectorAll('.line')].map((el, i) => { const canvas = el.querySelector('canvas'); return { input: el.querySelector('input'), canvas, g: canvas.getContext('2d'), seed: i * 7.31 }; });
 // Solid white line up to the value, blending over a few pixels into a faint line that barely wobbles.
 function drawSliders(time) {
   const dpr = Math.min(devicePixelRatio || 1, 2);
@@ -938,7 +922,7 @@ function drawSliders(time) {
     const c = sl.canvas, w = c.clientWidth, h = c.clientHeight;
     if (!w) continue;
     if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
-    const g = c.getContext('2d');
+    const g = sl.g;
     g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
     const inp = sl.input, min = +inp.min, max = +inp.max;
     const x = (inp.value - min) / (max - min) * w, y = Math.round(h / 2) + 0.5;
@@ -968,9 +952,11 @@ let t = 0, phase = 0, gustSm = 0;
 const wrapPI = a => Math.atan2(Math.sin(a), Math.cos(a));
 const tmpV = new THREE.Vector3();
 
+let beaconsLit = false;                                             // nothing but a flashing beacon is bright enough to bloom
 function renderFrame() {
   renderer.setRenderTarget(rt); renderer.render(scene, camera);
-  if (V.bloom > 0) {
+  const bloom = V.bloom > 0 && beaconsLit;                           // most frames no light is on: skip the whole blur chain
+  if (bloom) {
     brightMat.uniforms.tex.value = rt.texture; run(brightMat, mips[0].a);
     for (let i = 0; i < LEVELS; i++) {
       const m = mips[i], sz = m.a.width, szy = m.a.height;
@@ -981,7 +967,7 @@ function renderFrame() {
   }
   const u = finalMat.uniforms;
   u.tB0.value = mips[0].a.texture; u.tB1.value = mips[1].a.texture; u.tB2.value = mips[2].a.texture; u.tB3.value = mips[3].a.texture;
-  u.uT.value = t; u.uAmt.value = V.grain * GRAIN_BASE; u.uWarp.value = V.grain * GRAIN_WARP; u.uBloom.value = V.bloom;
+  u.uT.value = t; u.uAmt.value = V.grain * GRAIN_BASE; u.uWarp.value = V.grain * GRAIN_WARP; u.uBloom.value = bloom ? V.bloom : 0;
   run(finalMat, null);
 }
 
@@ -989,60 +975,59 @@ function update(dt) {
   t += dt;
   smoothControls(dt);
   skyT += dt * V.sky; applySky(skyT);                                  // the sky evolves
-  drawSliders(performance.now() / 1000);
+  hudShown = !document.body.classList.contains('hud-idle') && !controlsEl.classList.contains('hidden-ui') && !(IS_TOUCH && walk.on);
+  if (hudShown) drawSliders(performance.now() / 1000);
 
   // wind: base speed + slow gusts
   const gustN = Math.sin(t * 0.37) * 0.6 + Math.sin(t * 0.91 + 1.7) * 0.3 + Math.sin(t * 2.3) * 0.1;
-  gustSm += (gustN - gustSm) * Math.min(1, dt * 2);
+  gustSm = smooth(gustSm, gustN, 0.5, dt);
   const v = Math.max(0, V.speed * (1 + 0.25 * V.gust * gustSm));
   phase += dt * (0.6 + v * 0.55);
 
-  const toward = THREE.MathUtils.degToRad(V.dir + 180);            // direction the air moves
-  grassU.uWind.value.set(Math.sin(toward), -Math.cos(toward)); grassU.uSpeed.value = v; grassU.uSway.value = V.sway;
+  const toward = degToRad(V.dir + 180);
+  WIND.set(Math.sin(toward), -Math.cos(toward)); grassU.uSpeed.value = v; grassU.uSway.value = V.sway;
   grassU.uGust.value = V.gust; grassU.uPhase.value = phase; grassU.uTime.value = t;
 
   // turbines: yaw into the wind, rotor speed follows wind via a cut-in / rated curve
-  const targetYaw = Math.PI - THREE.MathUtils.degToRad(V.dir);
-  const rated = THREE.MathUtils.clamp((v - 2.5) / 8.5, 0, 1);
-  for (const T of turbines) {
+  const targetYaw = Math.PI - degToRad(V.dir);
+  const rated = clamp((v - 2.5) / 8.5, 0, 1);
+  if (farm.visible) for (const T of turbines) {                      // only the scene on screen
     const wob = Math.sin(t * 0.13 + T.yawPhase) * 0.05 * (0.3 + V.gust);
-    T.cur += wrapPI(targetYaw + T.yawOff + wob - T.cur) * Math.min(1, dt * 0.8);
+    T.cur += smooth(0, wrapPI(targetYaw + T.yawOff + wob - T.cur), 1.25, dt);
     T.yaw.rotation.y = T.cur;
     const target = 1.7 * rated * T.rpmK;
-    T.omega += (target - T.omega) * Math.min(1, dt * 0.6);        // rotor inertia
+    T.omega = smooth(T.omega, target, 1 / 0.6, dt);                 // rotor inertia
     T.rotor.rotation.z -= T.omega * dt;
   }
   // pylon wires + lights
-  latticeU.uT.value = t; latticeU.uSpeed.value = v; latticeU.uWind.value.set(Math.sin(toward), -Math.cos(toward));
-  updateBalls(t, v, latticeU.uWind.value);
-  // beacons: flash envelope → glow sprites, emissive housing, and a real point light for the nearest few
-  const key = ['farm', 'pylon', 'pylon2'][sceneIdx] || '';
-  const P11 = 1 / TAN_HALF, pooled = [];                              // glows are sized by angle (as at the reference field of view), so they stay in proportion at any framing
+  latticeU.uT.value = t; latticeU.uSpeed.value = v;
+  updateBalls(t, v, WIND);
+  // beacons (only the scene on screen): flash envelope → glow sprites, emissive housing, and a real point light for the nearest few
+  const key = SCENES[sceneIdx].key, P11 = 1 / TAN_HALF, pooled = [];   // glows are sized by angle (as at the reference field of view)
+  beaconsLit = false;
   for (const b of beacons) {
+    if (b.key !== key) continue;
     const fp = (t + b.off * S.interval) % S.interval;
     const env = S.hold ? 1 : fp < S.flashDur ? Math.sin(Math.PI * Math.pow(fp / S.flashDur, 0.6)) : 0;
-    b.env = env;
+    b.env = env; if (env > 0.01) beaconsLit = true;
     // constant screen size from far away (the reference look); physical size once you are close enough for it to matter
-    b.obj.getWorldPosition(tmpV); const dist = Math.max(0.5, tmpV.distanceTo(camera.position));
-    b.halo.scale.setScalar(Math.max(22 / REF_H * 2 / P11, 3.2 / dist));
-    b.core.scale.setScalar(Math.max(9 / REF_H * 2 / P11, 1.3 / dist));
+    b.obj.getWorldPosition(tmpV); b.dist = Math.max(0.5, tmpV.distanceTo(camera.position));
+    b.halo.scale.setScalar(Math.max(22 / REF_H * 2 / P11, 3.2 / b.dist));
+    b.core.scale.setScalar(Math.max(9 / REF_H * 2 / P11, 1.3 / b.dist));
     b.halo.visible = b.core.visible = env > 0.01;
     b.halo.material.opacity = env;
     b.core.material.color.setRGB(5.0 * env, 0.8 * env, 0.6 * env);                 // HDR (linear): feeds the bloom
     b.housing.material.color.setRGB(0.1 + 6 * env, 0.008 + 0.9 * env, 0.008 + 0.7 * env);
-    if (b.key === key) pooled.push(b);
+    pooled.push(b);
   }
-  if (pooled.length > POOL) {
-    pooled.forEach(b => { b.obj.getWorldPosition(tmpV); b.dist = tmpV.distanceTo(camera.position); });
-    pooled.sort((a, b) => a.dist - b.dist);
-  }
+  if (pooled.length > POOL) pooled.sort((a, b) => a.dist - b.dist);
   lightPool.forEach((l, n) => {
     const b = pooled[n];
     if (b && b.env > 0.01) { b.obj.getWorldPosition(l.position); l.intensity = BEACON_CD * b.env; } else l.intensity = 0;
   });
   // scene change: fade out, swap, fade in
   const target = pendingScene >= 0 ? 0 : 1;
-  fade += (target - fade) * (1 - Math.exp(-dt / 0.11));
+  fade = smooth(fade, target, 0.11, dt);
   if (pendingScene >= 0 && fade < 0.03) {
     SCENES[sceneIdx].show(false); sceneIdx = pendingScene; pendingScene = -1; SCENES[sceneIdx].show(true); paintScene();
   }
@@ -1070,7 +1055,6 @@ window.__sample = (x0, y0, x1, y1) => {
 };
 // Debug: expose settings (__S.hold = true keeps the lights lit)
 window.__go = i => { SCENES[sceneIdx].show(false); sceneIdx = (i + SCENES.length) % SCENES.length; pendingScene = -1; SCENES[sceneIdx].show(true); paintScene(); fade = 1; };
-window.__fade = f => { fade = f; finalMat.uniforms.uFade.value = f; };
 window.__cam = cam; window.__skyT = t => { skyT = t; applySky(t); }; window.__sky = () => ({ seed: SKY_SEED, t: +skyT.toFixed(1), link: `${location.origin}${location.pathname}?seed=${SKY_SEED}&t=${skyT.toFixed(0)}` }); window.__step = (dt = 1 / 60) => { update(dt); renderFrame(); }; window.__S = S; window.__V = V; window.__camera = camera; window.__walk = walk; window.__setWalk = setWalk;
 </script>
 </body>

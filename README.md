@@ -237,5 +237,6 @@ See [`worker/`](worker/) for the config.
 index.html     the whole game
 docs/          screenshots used in this README
 tools/         the sky fit (fit_sky.py) and the script that writes it into the page (apply_sky.py)
+DEPENDENCIES.md  what the project depends on, and what we wrote by hand that libraries also cover
 worker/        Cloudflare Worker that serves the page at mpts.ie/games/grainy
 ```
