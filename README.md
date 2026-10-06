@@ -54,6 +54,7 @@ Just the dusk, the ground and the grass.
 | **FROM** | Wind direction (where it blows *from*). Windmills turn to face it. |
 | **GUSTS** | How much the wind surges and drops. |
 | **GRASS** | How far the grass sways. |
+| **SKY** | How fast the sky evolves, 0–4×. 0 freezes it at its current state. |
 | **BLINK** | Seconds between each beacon's flashes. They are all out of step. |
 | **BLOOM** | The glow around the red lights. |
 | **GRAIN** | Film grain strength, 0–2×. |
@@ -136,6 +137,35 @@ Thin parts widen in the vertex shader to at least about a pixel so far-off wires
 
 ---
 
+## A living sky
+
+The sky is not a fixed gradient. It is **10 soft globs** drifting over a base colour, above two thin bands of horizon haze. Each glob is a signed colour offset with a gaussian falloff (a warm glow where it is positive, a cool shadow where it is negative):
+
+```
+colour = base + Σ haze · e^(−y/ε) + Σ strength · offset · e^(−(1 − cos θ)/σ²)
+         y = sin(elevation), θ = angle from the glob's centre, σ = its size
+```
+
+Over time each glob drifts round the sky (0.2–0.7°/s), rises and sinks, swells and fades, and shifts colour; the haze thickens and thins. The motion is seeded, so the sky is a pure function of time and evolves the same way on every load. The **SKY** slider sets the rate.
+
+### Starting where the photograph is
+
+At t = 0 the globs reproduce the gradient measured from the photograph. [`tools/fit_sky.py`](tools/fit_sky.py) fits them over the **whole sphere**, not just the visible frame, so the match holds wherever you look. Because the model is linear in its colours, those are solved exactly for any placement of the globs and only their positions and sizes are searched (variable projection). The two haze bands exist because the darkening in the bottom 2° of sky is too thin for any glob broad enough to drift nicely.
+
+Measured against the previous gradient sky, at three headings, the match is about **2 bytes RMS out of 255**, below the ~9-byte film grain:
+
+![Initial-condition parity at three angles](docs/sky/sky_parity.png)
+
+### How it evolves
+
+The same three headings at 0, 90 and 240 seconds:
+
+![Sky evolution: 3 angles × 3 times](docs/sky/sky_evolution.png)
+
+To refit: `python3 tools/fit_sky.py` (about 4 minutes) writes `tools/sky_blobs.json`, and `python3 tools/apply_sky.py` writes it into the page.
+
+---
+
 ## Lighting: only the red lights
 
 There is no sun, no sky light and no environment map on the 3D objects. Everything has a fixed near-black base, so it reads as a silhouette. **The only thing that ever lights an object is a flashing red beacon**: each has an emissive housing, a glow sprite, and a real point light that briefly lights the nacelle or pylon top around it.
@@ -169,7 +199,7 @@ Two details make it more than a texture:
 
 ## How it was built
 
-- **Measured, not guessed.** The sky gradient is row-by-row means from the photograph (using the brightest 40% of each row so silhouettes do not skew it): `rgb(106,81,91)` at the top, down to `rgb(33,31,50)` at the horizon, plus a left-to-right tint (pinker on the left, bluer and darker on the right). The tint wraps smoothly all the way round the sky so there is no seam when you look behind you.
+- **Measured, not guessed.** The sky gradient was measured row by row from the photograph (using the brightest 40% of each row so silhouettes do not skew it): `rgb(106,81,91)` at the top, down to `rgb(33,31,50)` at the horizon, plus a left-to-right tint (pinker on the left, bluer and darker on the right). That measurement is now the starting state the sky's globs are fitted to (see [A living sky](#a-living-sky)).
 - **The horizon is ragged.** The photograph's horizon is a broken edge of grass stubs, not a fade, so it is built from 110,000 sized-in-pixels blades that sway in the wind.
 - **Linear-light pipeline.** Sampled sRGB values are converted to linear on the way in; lighting and bloom happen in linear; a final pass encodes back to sRGB and adds grain.
 - **Terrain.** The ground is never perfectly flat: a gentle undulation shared between the CPU (placement, collisions) and the shaders.
@@ -199,5 +229,6 @@ See [`worker/`](worker/) for the config.
 ```
 index.html     the whole game
 docs/          screenshots used in this README
+tools/         the sky fit (fit_sky.py) and the script that writes it into the page (apply_sky.py)
 worker/        Cloudflare Worker that serves the page at mpts.ie/games/grainy
 ```
