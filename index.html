@@ -57,6 +57,7 @@
   <label for="dir"><span class="squeeze" id="o_dir" data-name="From">From</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="dir" type="range" min="0" max="360" step="1" value="150"></div>
   <label for="gust"><span class="squeeze" id="o_gust" data-name="Gusts">Gusts</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="gust" type="range" min="0" max="1" step="0.01" value="0.35"></div>
   <label for="sway"><span class="squeeze" id="o_sway" data-name="Grass">Grass</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="sway" type="range" min="0" max="2" step="0.01" value="1"></div>
+  <label for="sky"><span class="squeeze" id="o_sky" data-name="Sky">Sky</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="sky" type="range" min="0" max="4" step="0.05" value="1"></div>
   <label for="int"><span class="squeeze" id="o_int" data-name="Blink">Blink</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="int" type="range" min="2" max="120" step="1" value="28"></div>
   <label for="bloom"><span class="squeeze" id="o_bloom" data-name="Bloom">Bloom</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="bloom" type="range" min="0" max="2" step="0.01" value="1"></div>
   <label for="grain"><span class="squeeze" id="o_grain" data-name="Grain">Grain</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="grain" type="range" min="0" max="2" step="0.01" value="1"></div>
@@ -92,17 +93,8 @@ const REF_H = 605, REF_W = 1080, HORIZON_Y = 460;
 const FOV = 30;
 const F_REF = (REF_H / 2) / Math.tan(THREE.MathUtils.degToRad(FOV / 2)); // focal length in ref pixels
 
-// [y px in ref, r, g, b] — mean of the brighter 40% of pixels per row (excludes silhouettes).
-// The reference horizon is a ragged edge of grass stubs, not a fade, so the sky simply runs
-// down to its darkest haze colour (33,31,50 measured just above the edge) and the ground starts abruptly.
-const SKY_STOPS = [
-  [0,106,81,91],[120,101,76,88],[240,92,68,86],[300,83,62,82],[360,70,55,78],
-  [420,55,48,71],[440,40,37,58],[460,33,31,50],
-].map(([y,r,g,b]) => ({ h: HORIZON_Y - y, c: [r,g,b] })).sort((a,b) => a.h - b.h);
-
-// left→right tint measured across the sky (x px, dr, dg, db), relative to x=540
-const TINT_RAW = [[0,-6,-12,-11],[180,-2,-1,-2],[360,1,1,0],[540,0,0,0],[720,-15,-7,-7],[900,-30,-8,-10],[1080,-40,-9,-11]];
-const TINT = TINT_RAW.map(r => ({ x: r[0], d: [r[1], r[2], r[3]] }));
+// The sky itself is a set of drifting globs (see "Sky" below). Its t = 0 state was fitted, by tools/fit_sky.py, to the gradient measured
+// from the reference photograph: row-by-row means of the brighter 40% of pixels (silhouettes excluded), plus a left-to-right tint.
 
 const GROUND = [14,14,16], TOWER = [16,14,25], HAZE = [24,22,36];
 const rgb = a => new THREE.Color().setRGB(a[0]/255, a[1]/255, a[2]/255, THREE.SRGBColorSpace);   // sRGB bytes → linear Color
@@ -162,7 +154,7 @@ const bind = (id, key, fmt) => {
 // Smoothed copies of the controls. Each moves toward its slider with exponential smoothing
 // (a first-order low-pass filter): v += (target - v) * (1 - e^(-dt/τ)). Frame-rate independent.
 const V = {};
-const TAU = { speed: 1.4, dir: 1.0, gust: 0.7, sway: 0.6, grain: 0.35, bloom: 0.35 };   // time constants, seconds
+const TAU = { sky: 0.8, speed: 1.4, dir: 1.0, gust: 0.7, sway: 0.6, grain: 0.35, bloom: 0.35 };   // time constants, seconds
 const smoothControls = dt => {
   for (const k in TAU) {
     const a = 1 - Math.exp(-dt / TAU[k]);
@@ -176,6 +168,7 @@ bind('speed','speed', v => v.toFixed(1) + ' m/s');
 bind('dir','dir', v => v + '° ' + compass(v));
 bind('gust','gust', v => v.toFixed(2));
 bind('sway','sway', v => v.toFixed(2) + '×');
+bind('sky','sky', v => v === 0 ? 'frozen' : v.toFixed(2) + '×');
 bind('int','interval', v => v.toFixed(0) + ' s each');
 bind('bloom','bloom', v => v.toFixed(2) + '×');
 bind('grain','grain', v => v.toFixed(2) + '×');
@@ -211,64 +204,69 @@ bind('grain','grain', v => v.toFixed(2) + '×');
 addEventListener('keydown', e => { if (e.key === 'h' || e.key === 'H') [document.getElementById('controls'), document.getElementById('scenes')].forEach(e => e.classList.toggle('hidden-ui')); });
 
 /* ------------------------------------------------------------------ *
- *  Sky dome: sampled gradient down to the horizon + horizontal tint
+ *  Sky: soft globs drifting over a base colour, above a thin band of horizon haze. The globs wander, breathe and shift colour,
+ *  so the sky evolves. Its t = 0 state (SKY_INIT) was fitted to the reference gradient by tools/fit_sky.py.
+ *    colour = base + Σ haze.colour · e^(−y/ε)  +  Σ strength · glob.offset · e^(−(1 − cos θ)/σ²)
+ *    (y = sin(elevation); θ = angle from a glob's centre, so each glob is ≈ a gaussian of std σ; offsets are signed: glows and shadows)
  * ------------------------------------------------------------------ */
-const GRAD_N = 512, GRAD_MIN = 0, GRAD_MAX = HORIZON_Y;
-const gradData = new Uint8Array(GRAD_N * 4);
-for (let i = 0; i < GRAD_N; i++) {
-  const h = GRAD_MIN + (i / (GRAD_N - 1)) * (GRAD_MAX - GRAD_MIN);
-  let c;
-  if (h <= SKY_STOPS[0].h) c = SKY_STOPS[0].c;
-  else if (h >= SKY_STOPS.at(-1).h) c = SKY_STOPS.at(-1).c;
-  else {
-    let k = 0; while (SKY_STOPS[k + 1].h < h) k++;
-    const a = SKY_STOPS[k], b = SKY_STOPS[k + 1], t = (h - a.h) / (b.h - a.h);
-    c = a.c.map((v, j) => v + (b.c[j] - v) * t);
-  }
-  gradData.set([c[0], c[1], c[2], 255], i * 4);
+const SKY_INIT = {"base":[50.95,43.74,68.18],"haze":[{"eps":0.012,"color":[18.2,10.8,-9.3]},{"eps":0.04,"color":[-50.4,-35.4,-14.3]}],"blobs":[{"az":-0.085,"el":0.4033,"sigma":0.2503,"color":[38.4,21.0,15.6]},{"az":-0.0951,"el":0.9112,"sigma":0.16,"color":[25.0,11.6,10.3]},{"az":-1.61,"el":0.7709,"sigma":0.6229,"color":[28.8,11.9,5.8]},{"az":-0.1743,"el":1.285,"sigma":0.161,"color":[28.0,8.6,8.1]},{"az":0.8838,"el":0.7108,"sigma":0.6021,"color":[9.4,24.8,9.7]},{"az":-0.768,"el":0.4919,"sigma":0.3743,"color":[26.1,9.5,4.2]},{"az":2.2082,"el":0.5836,"sigma":0.4856,"color":[14.5,17.0,7.5]},{"az":-2.186,"el":0.7434,"sigma":0.6344,"color":[18.5,14.0,6.3]},{"az":-3.1158,"el":0.4953,"sigma":0.3784,"color":[12.2,11.0,4.6]},{"az":0.6455,"el":1.2554,"sigma":0.16,"color":[-15.5,0.1,-1.1]}]};
+const SKY_N = SKY_INIT.blobs.length, HAZE_N = SKY_INIT.haze.length;
+// Each glob gets its own deterministic motion (seeded, so every load evolves the same way): the sky is a pure function of time.
+const skyRand = (() => { let q = 20260506; return () => (q = (q * 1664525 + 1013904223) >>> 0) / 4294967296; })();
+const SKY_MOTION = SKY_INIT.blobs.map(() => ({
+  w: (skyRand() < 0.5 ? -1 : 1) * (0.003 + skyRand() * 0.009),                         // steady drift round the sky, rad/s (0.2–0.7°/s)
+  az: [0.05 + skyRand() * 0.12, 0.015 + skyRand() * 0.03, skyRand() * 6.283],           // azimuth wobble: amplitude (rad), rate (rad/s), phase
+  el: [0.08 + skyRand() * 0.16, 0.012 + skyRand() * 0.03, skyRand() * 6.283],           // rising and sinking
+  size: [0.15 + skyRand() * 0.2, 0.01 + skyRand() * 0.03, skyRand() * 6.283],           // breathing (fraction of σ)
+  str: [0.2 + skyRand() * 0.25, 0.01 + skyRand() * 0.03, skyRand() * 6.283],            // swelling and fading (fraction of strength)
+  hue: [0, 1, 2].map(() => [4 + skyRand() * 8, 0.008 + skyRand() * 0.025, skyRand() * 6.283]),   // per-channel colour drift, bytes
+}));
+const HAZE_MOTION = SKY_INIT.haze.map(() => [0.15 + skyRand() * 0.15, 0.006 + skyRand() * 0.01, skyRand() * 6.283]);   // the haze thickens and thins
+const osc = ([A, n, p], t) => A * (Math.sin(n * t + p) - Math.sin(p));                     // zero at t = 0, so the fitted state is exact
+const skyU = {
+  uBase: { value: new THREE.Vector3() },
+  uHaze: { value: Array.from({ length: HAZE_N }, () => new THREE.Vector4()) },             // (offset rgb, ε)
+  uBlobPos: { value: Array.from({ length: SKY_N }, () => new THREE.Vector3()) },
+  uBlobCol: { value: Array.from({ length: SKY_N }, () => new THREE.Vector3()) },          // signed offset, 0..1 units
+  uBlobK: { value: new Array(SKY_N).fill(1) },                                              // 1/σ²
+};
+const clampN = THREE.MathUtils.clamp;
+function applySky(t) {
+  const b0 = SKY_INIT.base;
+  skyU.uBase.value.set((b0[0] + osc([5, 0.011, 1.3], t)) / 255, (b0[1] + osc([4, 0.013, 2.1], t)) / 255, (b0[2] + osc([5, 0.009, 4.0], t)) / 255);
+  SKY_INIT.haze.forEach((hz, k) => { const m = 1 + osc(HAZE_MOTION[k], t); skyU.uHaze.value[k].set(hz.color[0] * m / 255, hz.color[1] * m / 255, hz.color[2] * m / 255, hz.eps); });
+  SKY_INIT.blobs.forEach((g, i) => {
+    const m = SKY_MOTION[i];
+    const az = g.az + m.w * t + osc(m.az, t), el = clampN(g.el + osc(m.el, t), 0, 1.45);
+    skyU.uBlobPos.value[i].set(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el));
+    const sigma = g.sigma * (1 + osc(m.size, t)), strength = clampN(1 + osc(m.str, t), 0.2, 1.8);
+    skyU.uBlobK.value[i] = 1 / (sigma * sigma);
+    skyU.uBlobCol.value[i].set(...g.color.map((c, k) => (c + Math.sign(c || 1) * osc(m.hue[k], t)) * strength / 255));
+  });
 }
-const gradTex = new THREE.DataTexture(gradData, GRAD_N, 1, THREE.RGBAFormat);
-gradTex.minFilter = gradTex.magFilter = THREE.LinearFilter;
-gradTex.needsUpdate = true;
+let skyT = 0;
+applySky(0);
 
 const sky = new THREE.Mesh(
   new THREE.SphereGeometry(7000, 48, 24),
   new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: {
-      uGrad: { value: gradTex }, uF: { value: F_REF },
-      uMin: { value: GRAD_MIN }, uMax: { value: GRAD_MAX }, uGround: { value: rgb(GROUND) },
-      uTintX: { value: TINT.map(t => t.x) },
-      uTintD: { value: TINT.map(t => new THREE.Vector3(...t.d.map(v => v / 255))) },
-    },
+    defines: { SKY_N, HAZE_N },
+    uniforms: Object.assign({ uF: { value: F_REF }, uGround: { value: rgb(GROUND) } }, skyU),
     vertexShader: `varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
     fragmentShader: `
-      uniform sampler2D uGrad; uniform float uF, uMin, uMax; uniform vec3 uGround;
-      vec3 srgb2lin(vec3 c){ return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c)); }
-      uniform float uTintX[7]; uniform vec3 uTintD[7];
+      uniform float uF; uniform vec3 uGround, uBase; uniform vec4 uHaze[HAZE_N];
+      uniform vec3 uBlobPos[SKY_N], uBlobCol[SKY_N]; uniform float uBlobK[SKY_N];
       varying vec3 vDir;
+      vec3 srgb2lin(vec3 c){ return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c)); }
       void main(){
         vec3 d = normalize(vDir);
-        float h = uF * d.y / max(length(d.xz), 1e-4);                 // px above horizon at ref scale
+        float h = uF * d.y / max(length(d.xz), 1e-4);                 // below the horizon is ground
         if (h < 0.0) { gl_FragColor = vec4(uGround, 1.0); return; }
-        vec3 col = texture2D(uGrad, vec2(clamp((h - uMin) / (uMax - uMin), 0.0, 1.0), 0.5)).rgb;
-        float az = atan(d.x, -d.z);                                   // full circle, no clamping
-        float aR = atan(540.0 / uF);                                  // half the width of the reference frame, as an angle
-        vec3 tint;
-        if (abs(az) <= aR) {                                          // inside the sampled span: the measured tint, left → right
-          float x = 540.0 + uF * tan(az);
-          tint = uTintD[0];
-          for (int i = 0; i < 6; i++) {
-            float t = clamp((x - uTintX[i]) / (uTintX[i+1] - uTintX[i]), 0.0, 1.0);
-            if (x > uTintX[i]) tint = mix(uTintD[i], uTintD[i+1], t);
-          }
-        } else {                                                      // everywhere else: ease from the right-hand tint round the back to the left-hand one
-          float span = 6.2831853 - 2.0 * aR;
-          float tt = (az > 0.0 ? az - aR : az + 6.2831853 - aR) / span;
-          tint = mix(uTintD[6], uTintD[0], tt * tt * (3.0 - 2.0 * tt));
-        }
-        col += tint * smoothstep(0.0, 160.0, h);
-        gl_FragColor = vec4(srgb2lin(col), 1.0);
+        vec3 col = uBase;
+        for (int k = 0; k < HAZE_N; k++) col += uHaze[k].rgb * exp(-d.y / uHaze[k].w);
+        for (int i = 0; i < SKY_N; i++) col += uBlobCol[i] * exp((dot(d, uBlobPos[i]) - 1.0) * uBlobK[i]);
+        gl_FragColor = vec4(srgb2lin(clamp(col, 0.0, 1.0)), 1.0);
       }`,
   })
 );
@@ -996,6 +994,7 @@ function renderFrame() {
 function update(dt) {
   t += dt;
   smoothControls(dt);
+  skyT += dt * V.sky; applySky(skyT);                                  // the sky evolves
   drawSliders(performance.now() / 1000);
 
   // wind: base speed + slow gusts
@@ -1078,7 +1077,7 @@ window.__sample = (x0, y0, x1, y1) => {
 // Debug: expose settings (__S.hold = true keeps the lights lit)
 window.__go = i => { SCENES[sceneIdx].show(false); sceneIdx = (i + SCENES.length) % SCENES.length; pendingScene = -1; SCENES[sceneIdx].show(true); paintScene(); fade = 1; };
 window.__fade = f => { fade = f; finalMat.uniforms.uFade.value = f; };
-window.__cam = cam; window.__S = S; window.__V = V; window.__camera = camera; window.__walk = walk; window.__setWalk = setWalk;
+window.__cam = cam; window.__skyT = t => { skyT = t; applySky(t); }; window.__step = (dt = 1 / 60) => { update(dt); renderFrame(); }; window.__S = S; window.__V = V; window.__camera = camera; window.__walk = walk; window.__setWalk = setWalk;
 </script>
 </body>
 </html>
