@@ -9,7 +9,6 @@
           --font-label:"Times New Roman", Times, "Liberation Serif", serif; color-scheme:dark; }
   html,body { margin:0; height:100%; background:var(--night); color:var(--ink); overflow:hidden; font-family:var(--font-label); }
   canvas#c { position:fixed; inset:0; width:100%; height:100%; display:block; }
-  #ref { position:fixed; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; pointer-events:none; }
   /* a column of line controls in the lower right, no panel */
   .controls { position:fixed; right:20px; bottom:calc(18px + env(safe-area-inset-bottom, 0px));
     display:grid; grid-template-columns:auto clamp(110px,18vw,170px); column-gap:14px; row-gap:4px; align-items:center;
@@ -51,7 +50,6 @@
 </head>
 <body>
 <canvas id="c"></canvas>
-<img id="ref" src="ref.webp" alt="">
 <div class="controls" id="controls">
   <label for="speed"><span class="squeeze" id="o_speed" data-name="Wind">Wind</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="speed" type="range" min="0" max="25" step="0.1" value="8"></div>
   <label for="dir"><span class="squeeze" id="o_dir" data-name="From">From</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="dir" type="range" min="0" max="360" step="1" value="150"></div>
@@ -60,7 +58,6 @@
   <label for="int"><span class="squeeze" id="o_int" data-name="Blink">Blink</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="int" type="range" min="2" max="120" step="1" value="28"></div>
   <label for="bloom"><span class="squeeze" id="o_bloom" data-name="Bloom">Bloom</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="bloom" type="range" min="0" max="2" step="0.01" value="1"></div>
   <label for="grain"><span class="squeeze" id="o_grain" data-name="Grain">Grain</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="grain" type="range" min="0" max="2" step="0.01" value="1"></div>
-  <label for="refop"><span class="squeeze" id="o_refop" data-name="Ref">Ref</span></label><div class="line"><canvas aria-hidden="true"></canvas><input id="refop" type="range" min="0" max="1" step="0.01" value="0"></div>
 </div>
 
 <div class="joy idle" id="joy"><div class="base" id="joybase"></div><div class="knob" id="joyknob"></div></div>
@@ -179,14 +176,6 @@ bind('sway','sway', v => v.toFixed(2) + '×');
 bind('int','interval', v => v.toFixed(0) + ' s each');
 bind('bloom','bloom', v => v.toFixed(2) + '×');
 bind('grain','grain', v => v.toFixed(2) + '×');
-{
-  const el = document.getElementById('refop'), out = document.getElementById('o_refop'), img = document.getElementById('ref');
-  let timer;
-  el.addEventListener('input', () => {
-    img.style.opacity = el.value; out.textContent = Math.round(el.value * 100) + '%';
-    clearTimeout(timer); timer = setTimeout(() => { out.textContent = out.dataset.name; }, 900);
-  });
-}
 /* HUD: wakes on any input and fades after a few idle seconds (the video-player pattern). Hovering it or dragging a slider keeps it awake.
    On touch a tap on the scene wakes it; on desktop moving the mouse does. Walking: only a mouse hover wakes it, so look-drags and WASD don't. H pins it hidden. */
 {

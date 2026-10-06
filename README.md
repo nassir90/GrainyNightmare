@@ -16,10 +16,6 @@ Everything started from this one image. Colours, the sky gradient, the grain, an
 
 ![The reference photograph](docs/00-reference.webp)
 
-The page can fade the reference over the render (the **REF** slider) so the two can be compared directly. Here at 50%, the 3D scene on top of the photograph:
-
-![Render over reference](docs/14-reference-overlay.jpg)
-
 ---
 
 ## Four scenes
@@ -61,7 +57,6 @@ Just the dusk, the ground and the grass.
 | **BLINK** | Seconds between each beacon's flashes. They are all out of step. |
 | **BLOOM** | The glow around the red lights. |
 | **GRAIN** | Film grain strength, 0–2×. |
-| **REF** | Fade the reference photograph over the scene. |
 
 Sliders ease to their targets with exponential smoothing (a first-order low-pass filter), so cranking the wind up spins the rotors up gradually instead of snapping.
 
@@ -190,7 +185,7 @@ It needs a local server (not `file://`) because it loads three.js as an ES modul
 
 ## Deploy
 
-The live page is a [Cloudflare Worker](worker/) serving this repo's `index.html` and `ref.webp` at `mpts.ie/games/grainy`.
+The live page is a [Cloudflare Worker](worker/) serving this repo's `index.html` at `mpts.ie/games/grainy`.
 
 ```bash
 cd worker
@@ -203,7 +198,6 @@ See [`worker/`](worker/) for the config.
 
 ```
 index.html     the whole game
-ref.webp       the reference photograph (used by the REF overlay)
 docs/          screenshots used in this README
 worker/        Cloudflare Worker that serves the page at mpts.ie/games/grainy
 ```

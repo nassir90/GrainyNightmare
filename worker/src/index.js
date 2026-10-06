@@ -1,5 +1,5 @@
 // Serves the game under /games/grainy/ by stripping that prefix and handing the
-// request to the static-asset binding (worker/public: index.html, ref.webp).
+// request to the static-asset binding (worker/public: index.html).
 const PREFIX = '/games/grainy';
 
 export default {

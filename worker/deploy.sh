@@ -4,5 +4,5 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 rm -rf public && mkdir public
-cp ../index.html ../ref.webp public/
+cp ../index.html public/
 npx --yes wrangler@latest deploy "$@"
