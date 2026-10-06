@@ -109,7 +109,7 @@ Landscape is unchanged: at the reference shape the camera is exactly the origina
 
 ### Touch controls
 
-Swipe left or right to change scene. There is no HUD button: the sliders and scene list fade out after a few idle seconds and come back when you touch the screen (the first tap just wakes them; it won't move a slider).
+Tap the scene names to change scene. The page never captures swipes outside walk mode, so pull-to-refresh and normal scrolling still work. There is no HUD button: the sliders and scene list fade out after a few idle seconds and come back when you touch the screen (the first tap just wakes them; it won't move a slider).
 
 Tap **E · Walk** and the screen becomes the controls:
 

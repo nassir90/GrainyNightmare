@@ -32,7 +32,8 @@
   .scenes .walk { margin-top:8px; }
   .scenes .walk[aria-pressed="true"] { opacity:1; }
   body.walking canvas#c { cursor:grab; } body.walking.dragging canvas#c { cursor:grabbing; }
-  canvas#c { touch-action:none; -webkit-user-select:none; user-select:none; }
+  canvas#c { -webkit-user-select:none; user-select:none; }
+  body.walking canvas#c { touch-action:none; }          /* touch gestures are only ours while walking (joystick + look-drag); otherwise the browser keeps pull-to-refresh etc. */
   /* touch layout: nothing but the world while walking; a floating joystick bottom-left, drag anywhere else to look */
   body.touch.walking .scenes, body.touch.walking .controls { opacity:0; pointer-events:none; }
   .joy { position:fixed; left:0; top:0; width:0; height:0; pointer-events:none; opacity:0; transition:opacity .4s; }
@@ -732,10 +733,6 @@ addEventListener('keydown', e => {
   goScene(k === 'ArrowLeft' ? base - 1 : base + 1);
 }, true);
 document.querySelectorAll('.line input').forEach(el => el.addEventListener('pointerup', () => el.blur()));
-{ let x0 = null;                                                     // swipe on touch screens
-  addEventListener('touchstart', e => { x0 = e.touches[0].clientX; }, { passive: true });
-  addEventListener('touchend', e => { if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null;
-    if (Math.abs(dx) > 60 && !e.target.closest('.line') && !(typeof walk !== 'undefined' && walk.on)) goScene((pendingScene >= 0 ? pendingScene : sceneIdx) + (dx < 0 ? 1 : -1)); }, { passive: true }); }
 
 /* ------------------------------------------------------------------ *
  *  Walk mode (press E): first person. WASD to move, Shift to run, drag to look.
