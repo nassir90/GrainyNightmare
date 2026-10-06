@@ -201,7 +201,12 @@ addEventListener('keydown', e => { if (e.key === 'h' || e.key === 'H') [document
 const SKY_INIT = {"base":[50.95,43.74,68.18],"haze":[{"eps":0.012,"color":[18.2,10.8,-9.3]},{"eps":0.04,"color":[-50.4,-35.4,-14.3]}],"blobs":[{"az":-0.085,"el":0.4033,"sigma":0.2503,"color":[38.4,21.0,15.6]},{"az":-0.0951,"el":0.9112,"sigma":0.16,"color":[25.0,11.6,10.3]},{"az":-1.61,"el":0.7709,"sigma":0.6229,"color":[28.8,11.9,5.8]},{"az":-0.1743,"el":1.285,"sigma":0.161,"color":[28.0,8.6,8.1]},{"az":0.8838,"el":0.7108,"sigma":0.6021,"color":[9.4,24.8,9.7]},{"az":-0.768,"el":0.4919,"sigma":0.3743,"color":[26.1,9.5,4.2]},{"az":2.2082,"el":0.5836,"sigma":0.4856,"color":[14.5,17.0,7.5]},{"az":-2.186,"el":0.7434,"sigma":0.6344,"color":[18.5,14.0,6.3]},{"az":-3.1158,"el":0.4953,"sigma":0.3784,"color":[12.2,11.0,4.6]},{"az":0.6455,"el":1.2554,"sigma":0.16,"color":[-15.5,0.1,-1.1]}]};
 const SKY_N = SKY_INIT.blobs.length, HAZE_N = SKY_INIT.haze.length;
 // Each glob gets its own deterministic motion (seeded, so every load evolves the same way): the sky is a pure function of time.
-const skyRand = (() => { let q = 20260506; return () => (q = (q * 1664525 + 1013904223) >>> 0) / 4294967296; })();
+// Every load starts somewhere new: a random seed picks each glob's motion, and a random start time (1–10 min) picks how far it has
+// already drifted, so each visit opens on a different (but always naturally evolved) dusk.
+//   ?sky=fitted      the fitted state itself (the parity screenshots)      ?seed=N&t=S   pin one particular sky (shareable)
+const skyQ = new URLSearchParams(location.search), SKY_FITTED = skyQ.get('sky') === 'fitted';
+const SKY_SEED = SKY_FITTED ? 20260506 : ((+skyQ.get('seed') >>> 0) || ((Math.random() * 4294967296) >>> 0));
+const skyRand = (() => { let q = SKY_SEED; return () => (q = (q * 1664525 + 1013904223) >>> 0) / 4294967296; })();
 const SKY_MOTION = SKY_INIT.blobs.map(() => ({
   w: (skyRand() < 0.5 ? -1 : 1) * (0.003 + skyRand() * 0.009),                         // steady drift round the sky, rad/s (0.2–0.7°/s)
   az: [0.05 + skyRand() * 0.12, 0.015 + skyRand() * 0.03, skyRand() * 6.283],           // azimuth wobble: amplitude (rad), rate (rad/s), phase
@@ -233,8 +238,8 @@ function applySky(t) {
     skyU.uBlobCol.value[i].set(...g.color.map((c, k) => (c + Math.sign(c || 1) * osc(m.hue[k], t)) * strength / 255));
   });
 }
-let skyT = 0;
-applySky(0);
+let skyT = SKY_FITTED ? 0 : (skyQ.has('t') ? +skyQ.get('t') || 0 : 60 + Math.random() * 540);
+applySky(skyT);
 
 const sky = new THREE.Mesh(
   new THREE.SphereGeometry(7000, 48, 24),
@@ -1066,7 +1071,7 @@ window.__sample = (x0, y0, x1, y1) => {
 // Debug: expose settings (__S.hold = true keeps the lights lit)
 window.__go = i => { SCENES[sceneIdx].show(false); sceneIdx = (i + SCENES.length) % SCENES.length; pendingScene = -1; SCENES[sceneIdx].show(true); paintScene(); fade = 1; };
 window.__fade = f => { fade = f; finalMat.uniforms.uFade.value = f; };
-window.__cam = cam; window.__skyT = t => { skyT = t; applySky(t); }; window.__step = (dt = 1 / 60) => { update(dt); renderFrame(); }; window.__S = S; window.__V = V; window.__camera = camera; window.__walk = walk; window.__setWalk = setWalk;
+window.__cam = cam; window.__skyT = t => { skyT = t; applySky(t); }; window.__sky = () => ({ seed: SKY_SEED, t: +skyT.toFixed(1), link: `${location.origin}${location.pathname}?seed=${SKY_SEED}&t=${skyT.toFixed(0)}` }); window.__step = (dt = 1 / 60) => { update(dt); renderFrame(); }; window.__S = S; window.__V = V; window.__camera = camera; window.__walk = walk; window.__setWalk = setWalk;
 </script>
 </body>
 </html>

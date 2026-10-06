@@ -146,7 +146,14 @@ colour = base + Σ haze · e^(−y/ε) + Σ strength · offset · e^(−(1 − c
          y = sin(elevation), θ = angle from the glob's centre, σ = its size
 ```
 
-Over time each glob drifts round the sky (0.2–0.7°/s), rises and sinks, swells and fades, and shifts colour; the haze thickens and thins. The motion is seeded, so the sky is a pure function of time and evolves the same way on every load. The **SKY** slider sets the rate.
+Over time each glob drifts round the sky (0.2–0.7°/s), rises and sinks, swells and fades, and shifts colour; the haze thickens and thins. The **SKY** slider sets the rate.
+
+**Every visit opens on a different sky.** A random seed picks each glob's motion and a random start time (1–10 minutes in) picks how far it has already drifted, so each load is a different, naturally evolved version of the same dusk: sometimes violet, sometimes mauve, occasionally green. Two URL options pin it down:
+
+| URL | Sky |
+|---|---|
+| `?sky=fitted` | the fitted starting state, matching the photograph (as in the parity sheet below) |
+| `?seed=N&t=S` | one particular sky, for sharing a good one (in the console, `__sky().link` gives the link for the current sky) |
 
 ### Starting where the photograph is
 

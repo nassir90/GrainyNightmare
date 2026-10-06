@@ -24,7 +24,12 @@ sky = r'''/* ------------------------------------------------------------------ 
 const SKY_INIT = ''' + init + r''';
 const SKY_N = SKY_INIT.blobs.length, HAZE_N = SKY_INIT.haze.length;
 // Each glob gets its own deterministic motion (seeded, so every load evolves the same way): the sky is a pure function of time.
-const skyRand = (() => { let q = 20260506; return () => (q = (q * 1664525 + 1013904223) >>> 0) / 4294967296; })();
+// Every load starts somewhere new: a random seed picks each glob's motion, and a random start time (1–10 min) picks how far it has
+// already drifted, so each visit opens on a different (but always naturally evolved) dusk.
+//   ?sky=fitted      the fitted state itself (the parity screenshots)      ?seed=N&t=S   pin one particular sky (shareable)
+const skyQ = new URLSearchParams(location.search), SKY_FITTED = skyQ.get('sky') === 'fitted';
+const SKY_SEED = SKY_FITTED ? 20260506 : ((+skyQ.get('seed') >>> 0) || ((Math.random() * 4294967296) >>> 0));
+const skyRand = (() => { let q = SKY_SEED; return () => (q = (q * 1664525 + 1013904223) >>> 0) / 4294967296; })();
 const SKY_MOTION = SKY_INIT.blobs.map(() => ({
   w: (skyRand() < 0.5 ? -1 : 1) * (0.003 + skyRand() * 0.009),                         // steady drift round the sky, rad/s (0.2–0.7°/s)
   az: [0.05 + skyRand() * 0.12, 0.015 + skyRand() * 0.03, skyRand() * 6.283],           // azimuth wobble: amplitude (rad), rate (rad/s), phase
@@ -56,8 +61,8 @@ function applySky(t) {
     skyU.uBlobCol.value[i].set(...g.color.map((c, k) => (c + Math.sign(c || 1) * osc(m.hue[k], t)) * strength / 255));
   });
 }
-let skyT = 0;
-applySky(0);
+let skyT = SKY_FITTED ? 0 : (skyQ.has('t') ? +skyQ.get('t') || 0 : 60 + Math.random() * 540);
+applySky(skyT);
 
 const sky = new THREE.Mesh(
   new THREE.SphereGeometry(7000, 48, 24),
@@ -91,6 +96,6 @@ rep('  <label for="int">', '  <label for="sky"><span class="squeeze" id="o_sky" 
 rep("bind('int','interval',", "bind('sky','sky', v => v === 0 ? 'frozen' : v.toFixed(2) + '×');\nbind('int','interval',")
 rep("const TAU = { speed: 1.4,", "const TAU = { sky: 0.8, speed: 1.4,")
 rep("  smoothControls(dt);\n", "  smoothControls(dt);\n  skyT += dt * V.sky; applySky(skyT);                                  // the sky evolves\n")
-rep("window.__S = S; window.__V = V;", "window.__skyT = t => { skyT = t; applySky(t); }; window.__step = (dt = 1 / 60) => { update(dt); renderFrame(); }; window.__S = S; window.__V = V;")
+rep("window.__S = S; window.__V = V;", "window.__skyT = t => { skyT = t; applySky(t); }; window.__sky = () => ({ seed: SKY_SEED, t: +skyT.toFixed(1), link: `${location.origin}${location.pathname}?seed=${SKY_SEED}&t=${skyT.toFixed(0)}` }); window.__step = (dt = 1 / 60) => { update(dt); renderFrame(); }; window.__S = S; window.__V = V;")
 open('index.html', 'w').write(s)
 print('applied; globs:', len(fit["blobs"]), 'haze bands:', len(fit["haze"]), 'fit RMS', fit["rms_bytes"], 'frame RMS', fit["frame_rms_bytes"])
