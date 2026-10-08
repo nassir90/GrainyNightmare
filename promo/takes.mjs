@@ -1,4 +1,4 @@
-// Stark shots: 6 skies × 13 shots, 5 s each, 1080 × 1920.
+// Stark shots: 6 skies × 15 shots, 5 s each, 1080 × 1920.
 //   node ~/projects/TapaTab/tapatab.mjs promo/takes.mjs
 //   EVOLUTION=15 BLINK=6 node ~/projects/TapaTab/tapatab.mjs promo/takes.mjs --jobs 3   (sky speed, seconds between flashes)
 // The page's debug hooks (__go, __walk, __setWalk, __cam, __S) are on window; setup reads the shot from the query string.
@@ -7,7 +7,8 @@ const SKIES = { '1-dusk': 'sky=fitted', '2-blue': 'seed=11&t=300', '3-violet': '
 const EVOLUTION = process.env.EVOLUTION || 1;   // how fast the sky evolves: 1 is the game's default
 const BLINK = process.env.BLINK || 6;          // the Blink slider: seconds between each beacon's flashes (the game's default is 28)
 const SHOTS = ['windmills', 'pylons-1', 'pylons-2', 'under-pylon', 'windmill-foot', 'beneath-wires',
-               'hub-height', 'pylon-crown', 'up-the-tower', 'along-the-wires', 'beacon-field', 'crane-rise', 'pylon-orbit'];
+               'hub-height', 'pylon-crown', 'up-the-tower', 'along-the-wires', 'beacon-field', 'crane-rise', 'pylon-orbit',
+               'farm-elevated', 'pylon-line-wide'];
 
 const takes = {};
 for (const [sky, q] of Object.entries(SKIES))
@@ -37,7 +38,7 @@ export default {
     // free camera: [scene, camera [x, height, z], looking at [x, y, z]]
     const AIM = { 6: [0, [110, 45, -250], [49, 80, -310]],   7: [1, [46, 38, -150], [-14, 45, -345]],  8: [0, [53, 1.7, -310], [49, 200, -312]],
                   9: [2, [-470, 30, -200], [600, 38, -320]], 10: [0, [0, 140, -120], [-40, 0, -700]],  11: [0, [140, 3, -260], [49, 80, -310]],
-                  12: [1, [93, 22, -145], [38, 30, -170]] };
+                  12: [1, [93, 22, -145], [38, 30, -170]],   13: [0, [-60, 30, -120], [49, 80, -310]], 14: [1, [200, 20, -60], [-14, 42, -345]] };
     window.__aim = (P, T) => {
       const dx = T[0] - P[0], dz = T[2] - P[2];
       window.__eyeH = P[1]; W.pos.set(P[0], 0, P[2]); W.vel.set(0, 0);
