@@ -138,8 +138,8 @@ const CONTROLS = [
   ['bloom',    'Bloom', 0, 2,   0.01, 1,    v => v.toFixed(2) + '×'],
   ['grain',    'Grain', 0, 2,   0.01, 1,    v => v.toFixed(2) + '×'],
 ];
-// URL overrides of a control's starting value, e.g. ?skyspeed=12 for a fast-evolving sky (a value past the slider's end extends it)
-const URL_CONTROLS = { skyspeed: 'sky' };
+// URL overrides of a control's starting value, e.g. ?evolution=12 for a fast-evolving sky (a value past the slider's end extends it)
+const URL_CONTROLS = { evolution: 'sky' };
 for (const [q, key] of Object.entries(URL_CONTROLS)) {
   const v = parseFloat(new URLSearchParams(location.search).get(q)), row = CONTROLS.find(c => c[0] === key);
   if (v >= 0) { row[5] = v; row[3] = Math.max(row[3], v); }
@@ -205,7 +205,7 @@ const SKY_N = SKY_INIT.blobs.length, HAZE_N = SKY_INIT.haze.length;
 // Every load starts somewhere new: a random seed picks each glob's motion, and a random start time (1–10 min) picks how far it has
 // already drifted, so each visit opens on a different (but always naturally evolved) dusk.
 //   ?sky=fitted      the fitted state itself (the parity screenshots)      ?seed=N&t=S   pin one particular sky (shareable)
-//   ?skyspeed=N      start the sky evolving at N× (default 1)
+//   ?evolution=N     start the sky evolving at N× (default 1)
 const skyQ = new URLSearchParams(location.search), SKY_FITTED = skyQ.get('sky') === 'fitted';
 const SKY_SEED = SKY_FITTED ? 20260506 : ((+skyQ.get('seed') >>> 0) || ((Math.random() * 4294967296) >>> 0));
 const skyRand = (() => { let q = SKY_SEED; return () => (q = (q * 1664525 + 1013904223) >>> 0) / 4294967296; })();
@@ -1062,7 +1062,7 @@ window.__sample = (x0, y0, x1, y1) => {
 };
 // Debug: expose settings (__S.hold = true keeps the lights lit)
 window.__go = i => { SCENES[sceneIdx].show(false); sceneIdx = (i + SCENES.length) % SCENES.length; pendingScene = -1; SCENES[sceneIdx].show(true); paintScene(); fade = 1; };
-window.__cam = cam; window.__skyT = t => { skyT = t; applySky(t); }; window.__sky = () => ({ seed: SKY_SEED, t: +skyT.toFixed(1), link: `${location.origin}${location.pathname}?seed=${SKY_SEED}&t=${skyT.toFixed(0)}${S.sky !== 1 ? '&skyspeed=' + S.sky : ''}` }); window.__step = (dt = 1 / 60) => { update(dt); renderFrame(); }; window.__S = S; window.__V = V; window.__camera = camera; window.__walk = walk; window.__setWalk = setWalk;
+window.__cam = cam; window.__skyT = t => { skyT = t; applySky(t); }; window.__sky = () => ({ seed: SKY_SEED, t: +skyT.toFixed(1), link: `${location.origin}${location.pathname}?seed=${SKY_SEED}&t=${skyT.toFixed(0)}${S.sky !== 1 ? '&evolution=' + S.sky : ''}` }); window.__step = (dt = 1 / 60) => { update(dt); renderFrame(); }; window.__S = S; window.__V = V; window.__camera = camera; window.__walk = walk; window.__setWalk = setWalk;
 </script>
 </body>
 </html>

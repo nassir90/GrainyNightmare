@@ -154,7 +154,7 @@ Over time each glob drifts round the sky (0.2–0.7°/s), rises and sinks, swell
 |---|---|
 | `?sky=fitted` | the fitted starting state, matching the photograph (as in the parity sheet below) |
 | `?seed=N&t=S` | one particular sky, for sharing a good one (in the console, `__sky().link` gives the link for the current sky) |
-| `?skyspeed=N` | start the sky evolving at N× (the **EVOLUTION** slider's starting value; above 4× the slider extends to fit). Combines with the others, e.g. `?seed=11&t=300&skyspeed=30` |
+| `?evolution=N` | start the sky evolving at N× (the **EVOLUTION** slider's starting value; above 4× the slider extends to fit). Combines with the others, e.g. `?seed=11&t=300&evolution=30` |
 
 ### Starting where the photograph is
 
