@@ -54,7 +54,7 @@ Just the dusk, the ground and the grass.
 | **FROM** | Wind direction (where it blows *from*). Windmills turn to face it. |
 | **GUSTS** | How much the wind surges and drops. |
 | **GRASS** | How far the grass sways. |
-| **SKY** | How fast the sky evolves, 0–4×. 0 freezes it at its current state. |
+| **EVOLUTION** | How fast the sky evolves, 0–4×. 0 freezes it at its current state. |
 | **BLINK** | Seconds between each beacon's flashes. They are all out of step. |
 | **BLOOM** | The glow around the red lights. |
 | **GRAIN** | Film grain strength, 0–2×. |
@@ -146,7 +146,7 @@ colour = base + Σ haze · e^(−y/ε) + Σ strength · offset · e^(−(1 − c
          y = sin(elevation), θ = angle from the glob's centre, σ = its size
 ```
 
-Over time each glob drifts round the sky (0.2–0.7°/s), rises and sinks, swells and fades, and shifts colour; the haze thickens and thins. The **SKY** slider sets the rate.
+Over time each glob drifts round the sky (0.2–0.7°/s), rises and sinks, swells and fades, and shifts colour; the haze thickens and thins. The **EVOLUTION** slider sets the rate.
 
 **Every visit opens on a different sky.** A random seed picks each glob's motion and a random start time (1–10 minutes in) picks how far it has already drifted, so each load is a different, naturally evolved version of the same dusk: sometimes violet, sometimes mauve, occasionally green. Two URL options pin it down:
 
@@ -154,7 +154,7 @@ Over time each glob drifts round the sky (0.2–0.7°/s), rises and sinks, swell
 |---|---|
 | `?sky=fitted` | the fitted starting state, matching the photograph (as in the parity sheet below) |
 | `?seed=N&t=S` | one particular sky, for sharing a good one (in the console, `__sky().link` gives the link for the current sky) |
-| `?skyspeed=N` | start the sky evolving at N× (the **SKY** slider's starting value; above 4× the slider extends to fit). Combines with the others, e.g. `?seed=11&t=300&skyspeed=30` |
+| `?skyspeed=N` | start the sky evolving at N× (the **EVOLUTION** slider's starting value; above 4× the slider extends to fit). Combines with the others, e.g. `?seed=11&t=300&skyspeed=30` |
 
 ### Starting where the photograph is
 
