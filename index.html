@@ -37,7 +37,7 @@
   .joy .base { position:absolute; width:110px; height:110px; margin:-55px 0 0 -55px; border:1px solid rgba(255,255,255,.35); border-radius:50%; box-shadow:0 0 12px rgba(0,0,0,.4); }
   .joy .knob { position:absolute; width:46px; height:46px; margin:-23px 0 0 -23px; border-radius:50%; background:rgba(255,255,255,.28); border:1px solid rgba(255,255,255,.6); }
   .joy.idle .base, .joy.idle .knob { opacity:.4; }
-  .topbtn { position:fixed; right:calc(16px + env(safe-area-inset-right, 0px)); top:calc(14px + env(safe-area-inset-top, 0px)); font:inherit; font-size:14px; letter-spacing:.06em; text-transform:uppercase;
+  .topbtn { position:fixed; left:calc(16px + env(safe-area-inset-left, 0px)); top:calc(14px + env(safe-area-inset-top, 0px)); font:inherit; font-size:14px; letter-spacing:.06em; text-transform:uppercase;
     color:#fff; background:rgba(14,14,16,.45); border:1px solid rgba(255,255,255,.35); border-radius:2px; padding:6px 10px; cursor:pointer; display:none; text-shadow:0 0 6px rgba(0,0,0,.6); }
   body.touch.walking #exitbtn { display:block; }
   /* the HUD wakes on input and fades when idle; while faded it ignores touches, so the first tap just wakes it */
