@@ -4,3 +4,5 @@ worker/.wrangler/
 .DS_Store
 node_modules/
 promo/clips/
+promo/
+DEPENDENCIES.md
